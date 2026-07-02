@@ -1,0 +1,42 @@
+name: ThoughtQueue
+options:
+  bundleIdPrefix: com.thoughtqueue
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "26.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+targets:
+  ThoughtQueue:
+    type: application
+    platform: macOS
+    sources:
+      - ThoughtQueue
+    settings:
+      base:
+        INFOPLIST_FILE: ThoughtQueue/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ThoughtQueue/ThoughtQueue.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: com.thoughtqueue.app
+        PRODUCT_NAME: ThoughtQueue
+        LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
+        COMBINE_HIDPI_IMAGES: true
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies: []
+
+  ThoughtQueueTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - ThoughtQueueTests
+    dependencies:
+      - target: ThoughtQueue
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ThoughtQueue.app/Contents/MacOS/ThoughtQueue"

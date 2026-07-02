@@ -1,0 +1,5 @@
+build/
+*.profraw
+.DS_Store
+xcuserdata/
+*.xcuserstate

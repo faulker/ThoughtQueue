@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThoughtQueue → quick notes · brainstorm keepsake</title>
+<style>
+  :root {
+    --paper: #f4f1ea;
+    --paper-2: #ece7dc;
+    --ink: #2b2a26;
+    --ink-soft: #5c594f;
+    --line: #d8d2c4;
+    --line-strong: #c4bda9;
+    --accent: #3a6e54;      /* folder green */
+    --accent-2: #b4632a;    /* terminal amber/clay */
+    --curse: #8a3b3b;       /* genie curse red */
+    --patch: #3a6e54;
+    --mono: ui-monospace, "SF Mono", "Menlo", "Cascadia Code", "JetBrains Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    background-image:
+      linear-gradient(var(--paper-2) 1px, transparent 1px),
+      linear-gradient(90deg, var(--paper-2) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: -1px -1px;
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 22px; }
+
+  /* ---------- window chrome (Finder/terminal motif) ---------- */
+  .titlebar {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--paper-2);
+    border: 1px solid var(--line-strong);
+    border-bottom: none;
+    border-radius: 9px 9px 0 0;
+    padding: 9px 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+  .dot.r { background: #e0655b; }
+  .dot.y { background: #e3b341; }
+  .dot.g { background: #57b85a; }
+  .titlebar .path { margin-left: 10px; opacity: .8; }
+
+  .panel {
+    background: rgba(255,255,255,.45);
+    border: 1px solid var(--line-strong);
+    border-radius: 0 0 9px 9px;
+  }
+
+  /* ---------- hero ---------- */
+  header.hero { padding-top: 54px; }
+  .hero-inner { padding: 38px 34px 40px; }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin: 0 0 14px;
+  }
+  h1.title {
+    font-family: var(--mono);
+    font-size: clamp(28px, 5vw, 46px);
+    line-height: 1.12;
+    margin: 0 0 6px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+  }
+  h1.title .arrow { color: var(--accent); }
+  .subtitle {
+    font-size: 17px;
+    color: var(--ink-soft);
+    max-width: 56ch;
+    margin: 14px 0 0;
+  }
+  .meta-row {
+    margin-top: 26px;
+    display: flex; flex-wrap: wrap; gap: 10px;
+    font-family: var(--mono); font-size: 12px;
+  }
+  .chip {
+    border: 1px solid var(--line-strong);
+    background: var(--paper);
+    border-radius: 999px;
+    padding: 5px 12px;
+    color: var(--ink-soft);
+  }
+  .chip b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- principles strip ---------- */
+  .principles {
+    margin: 30px 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+  .principle {
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 10px;
+    padding: 18px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .principle .n {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--accent-2); letter-spacing: .1em;
+  }
+  .principle .p {
+    font-family: var(--mono);
+    font-size: 14px; font-weight: 600;
+    margin-top: 8px; line-height: 1.35;
+  }
+  .principle::after {
+    content: "$"; position: absolute; right: 12px; bottom: 6px;
+    font-family: var(--mono); font-size: 38px; color: rgba(255,255,255,.06);
+  }
+
+  /* ---------- section frame ---------- */
+  section.tech { margin: 48px 0; }
+  .tech-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; flex-wrap: wrap; }
+  .tech-num {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--paper);
+    background: var(--accent);
+    border-radius: 6px;
+    padding: 3px 9px;
+    font-weight: 600;
+  }
+  .tech-num.invented { background: var(--accent-2); }
+  h2.tech-title {
+    font-family: var(--mono);
+    font-size: clamp(20px, 3vw, 27px);
+    margin: 0;
+    font-weight: 700;
+  }
+  .tech-tag {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--ink-soft);
+    border: 1px dashed var(--line-strong);
+    padding: 2px 7px; border-radius: 5px;
+  }
+  .tech-lede {
+    color: var(--ink-soft);
+    margin: 8px 0 22px;
+    font-size: 15px;
+    max-width: 64ch;
+  }
+
+  /* ---------- 1. cursed genie ---------- */
+  .genie {
+    background: linear-gradient(180deg, #1d1b27 0%, #241f33 100%);
+    border-radius: 12px;
+    padding: 26px;
+    color: #e9e3f5;
+  }
+  .lamp { font-size: 26px; margin-bottom: 4px; }
+  .grant { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .grant-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .grant-cell { padding: 14px 15px; font-size: 13.5px; line-height: 1.45; }
+  .grant-cell .lbl {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .12em;
+    text-transform: uppercase; display: block; margin-bottom: 7px; opacity: .85;
+  }
+  .gc-wish { background: rgba(120,140,255,.10); }
+  .gc-wish .lbl { color: #9fb2ff; }
+  .gc-curse { background: rgba(180,70,70,.14); }
+  .gc-curse .lbl { color: #ff9d9d; }
+  .gc-patch { background: rgba(80,170,120,.13); }
+  .gc-patch .lbl { color: #93e3b6; }
+  .grant-row::before { display:none; }
+  @media (max-width: 640px) { .grant-row { grid-template-columns: 1fr; } }
+
+  /* ---------- 2. relay race ---------- */
+  .relay { position: relative; padding-left: 4px; }
+  .track {
+    border-left: 3px solid var(--line-strong);
+    margin-left: 14px;
+    padding-left: 28px;
+  }
+  .leg { position: relative; padding: 12px 0; }
+  .leg::before {
+    content: "→";
+    position: absolute; left: -42px; top: 12px;
+    font-family: var(--mono); font-weight: 700;
+    color: var(--accent-2);
+    background: var(--paper);
+    width: 26px; height: 26px;
+    display: grid; place-items: center;
+    border: 1px solid var(--line-strong);
+    border-radius: 50%;
+    font-size: 13px;
+  }
+  .leg .baton {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--accent); letter-spacing: .08em; text-transform: uppercase;
+  }
+  .leg .body { margin-top: 3px; font-size: 15px; }
+  .reframe {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 18px;
+    font-size: 15px;
+  }
+  .reframe .tag {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: .12em; opacity: .85; display: block; margin-bottom: 6px;
+  }
+
+  /* ---------- 3. defector ---------- */
+  .defect { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px){ .defect { grid-template-columns: 1fr; } }
+  .escape {
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    padding: 18px;
+    background: rgba(255,255,255,.5);
+  }
+  .escape h4 { margin: 0 0 4px; font-family: var(--mono); font-size: 15px; }
+  .escape .fail { color: var(--curse); font-size: 13.5px; }
+  .escape .spec { margin-top: 8px; font-size: 14px; }
+  .spectrum {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 10px;
+    padding: 18px 20px;
+    text-align: center;
+    font-family: var(--mono); font-size: 13px;
+  }
+  .spectrum .bar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 14px; gap: 10px;
+  }
+  .spectrum .end { color: var(--ink-soft); font-size: 12px; }
+  .spectrum .mid {
+    background: var(--accent); color: #fff;
+    border-radius: 999px; padding: 6px 14px; font-weight: 600;
+  }
+  .spectrum .line { flex: 1; height: 2px; background: var(--line-strong); }
+
+  /* line in the sand */
+  .sand {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+    background: var(--ink); color: var(--paper);
+    border-radius: 10px; padding: 18px 20px;
+    font-family: var(--mono);
+  }
+  .sand .label { color: var(--accent-2); font-size: 11px; letter-spacing: .12em; }
+  .sand .rule { font-size: 15px; margin-top: 8px; line-height: 1.5; }
+  .sand .rule b { color: #fff; }
+
+  /* ---------- 4. outlive ---------- */
+  .outlive {
+    background: rgba(255,255,255,.5);
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .epitaph {
+    font-family: var(--mono);
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 14px;
+    border-bottom: 1px dashed var(--line-strong);
+    padding-bottom: 18px; margin-bottom: 20px;
+  }
+  .survive-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px){ .survive-grid { grid-template-columns: 1fr; } }
+  .col-h { font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 10px; }
+  .col.lost .col-h { color: var(--curse); }
+  .col.kept .col-h { color: var(--accent); }
+  .stack { list-style: none; margin: 0; padding: 0; }
+  .stack li {
+    font-family: var(--mono); font-size: 13px;
+    padding: 8px 12px; margin-bottom: 7px;
+    border-radius: 7px;
+  }
+  .col.lost .stack li { background: rgba(138,59,59,.10); color: #6f3030; text-decoration: line-through; text-decoration-thickness: 1px; }
+  .col.kept .stack li { background: rgba(58,110,84,.12); color: #2c5641; }
+
+  /* ---------- 5. JTBD ---------- */
+  .jobs { display: grid; gap: 16px; }
+  .job {
+    border: 1px solid var(--line-strong);
+    border-left: 4px solid var(--accent-2);
+    border-radius: 8px;
+    background: rgba(255,255,255,.5);
+    padding: 16px 18px;
+  }
+  .job .quote {
+    font-style: italic; font-size: 15.5px; margin: 0 0 10px;
+  }
+  .job .deco {
+    font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft);
+  }
+  .job .deco b { color: var(--accent); }
+  .working-doc {
+    background: var(--ink); color: var(--paper);
+    border-radius: 10px; padding: 20px;
+    margin-top: 4px;
+  }
+  .working-doc .label { font-family: var(--mono); color: var(--accent-2); font-size: 11px; letter-spacing: .12em; }
+  .working-doc .h { font-family: var(--mono); font-size: 16px; margin: 8px 0 6px; }
+  .working-doc p { margin: 0; font-size: 14px; color: #d9d4c8; }
+
+  /* ---------- synthesis climax ---------- */
+  .synth {
+    margin: 64px 0 40px;
+    background: linear-gradient(180deg, #20382c 0%, #16271e 100%);
+    color: #eef3ee;
+    border-radius: 14px;
+    padding: 40px 34px 36px;
+    position: relative;
+    overflow: hidden;
+  }
+  .synth::before {
+    content: "// the only durable truth is the notes";
+    position: absolute; top: 14px; right: 18px;
+    font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.18);
+  }
+  .synth .kicker { color: #8fd3aa; }
+  .synth h2 {
+    font-family: var(--mono); font-size: clamp(24px, 4vw, 34px);
+    margin: 6px 0 18px; font-weight: 700;
+  }
+  .synth-grid { display: grid; gap: 16px; }
+  .finding {
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 10px;
+    padding: 18px 20px;
+    background: rgba(255,255,255,.03);
+  }
+  .finding .id { font-family: var(--mono); color: #8fd3aa; font-size: 12px; }
+  .finding .t { font-weight: 600; font-size: 16px; margin: 6px 0 6px; font-family: var(--mono); }
+  .finding p { margin: 0; font-size: 14.5px; color: #cfe0d4; line-height: 1.55; }
+  .finding .t .eq { color: #e0a86a; }
+
+  .architecture {
+    margin-top: 22px;
+    font-family: var(--mono); font-size: 13px;
+    background: rgba(0,0,0,.25);
+    border-radius: 10px;
+    padding: 18px 20px;
+    color: #d6e4d9;
+    overflow-x: auto;
+  }
+  .architecture .c { color: #8fd3aa; }
+  .architecture .a { color: #e0a86a; }
+
+  .chosen {
+    margin-top: 22px;
+    border-top: 1px solid rgba(255,255,255,.14);
+    padding-top: 18px;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    color: #cfe0d4;
+  }
+  .chosen b { color: #fff; }
+
+  /* ---------- footer ---------- */
+  footer {
+    margin: 50px 0 70px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  footer .prompt { color: var(--accent-2); }
+
+  @media (max-width: 700px){
+    .principles { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="titlebar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="path">~/Notes/brainstorm-thoughtqueue-quicknotes-2026-06-24/brainstorm.html</span>
+    </div>
+    <div class="panel hero-inner">
+      <p class="kicker">Brainstorming session · facilitator mode · your ideas</p>
+      <h1 class="title">ThoughtQueue <span class="arrow">→</span><br>own your files</h1>
+      <p class="subtitle">
+        Evolving a macOS menu-bar app into a fast daily-driver quick-notes tool:
+        plain markdown, a folder you choose, and a user-definable "Open with."
+        The app is a thin shell over the filesystem. The notes outlive the app.
+      </p>
+      <div class="meta-row">
+        <span class="chip"><b>Goal:</b>&nbsp;a notes app I'll actually use</span>
+        <span class="chip"><b>5</b>&nbsp;techniques</span>
+        <span class="chip"><b>Mode:</b>&nbsp;facilitator</span>
+        <span class="chip">2026-06-24</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- GUIDING PRINCIPLES -->
+  <div class="principles">
+    <div class="principle">
+      <div class="n">// 01</div>
+      <div class="p">Own your files</div>
+    </div>
+    <div class="principle">
+      <div class="n">// 02</div>
+      <div class="p">Personal, not corp</div>
+    </div>
+    <div class="principle">
+      <div class="n">// 03</div>
+      <div class="p">No accounts, no money</div>
+    </div>
+    <div class="principle">
+      <div class="n">// 04</div>
+      <div class="p">Notes are the only durable truth</div>
+    </div>
+  </div>
+
+  <!-- 1. CURSED GENIE -->
+  <section class="tech">
+    <div class="tech-head">
+      <span class="tech-num">01</span>
+      <h2 class="tech-title">Cursed Genie</h2>
+      <span class="tech-tag">wish → curse → patch</span>
+    </div>
+    <p class="tech-lede">
+      You rub the lamp and ask for effortless capture. The genie grants every wish
+      exactly, then twists it. Each twist becomes the next design constraint.
+    </p>
+
+    <div class="genie">
+      <div class="lamp" aria-hidden="true">🪔</div>
+      <div class="grant">
+
+        <div class="grant-row">
+          <div class="grant-cell gc-wish"><span class="lbl">Wish</span>
+            Grab text from anywhere with one move — right-click context action <em>and</em> a key command to turn a selection into a note. Plus quick-capture from the menu-bar dropdown.</div>
+          <div class="grant-cell gc-curse"><span class="lbl">Curse</span>
+            Granted — but now you have a pile of nameless fragments and nowhere they belong.</div>
+          <div class="grant-cell gc-patch"><span class="lbl">Patch</span>
+            Auto-generate a title for every note, no manual typing.</div>
+        </div>
+
+        <div class="grant-row">
+          <div class="grant-cell gc-wish"><span class="lbl">Wish</span>
+            Then never make me file anything either.</div>
+          <div class="grant-cell gc-curse"><span class="lbl">Curse</span>
+            Granted — titled notes, all dumped in one heap.</div>
+          <div class="grant-cell gc-patch"><span class="lbl">Patch</span>
+            Auto-organize notes into categories.</div>
+        </div>
+
+        <div class="grant-row">
+          <div class="grant-cell gc-wish"><span class="lbl">Wish</span>
+            Make the smarts private — I don't want a cloud reading my notes.</div>
+          <div class="grant-cell gc-curse"><span class="lbl">Curse</span>
+            Granted, but only if it stays offline and yours.</div>
+          <div class="grant-cell gc-patch"><span class="lbl">Patch</span>
+            A small <em>local</em> LLM powers auto-titling + auto-categorization. Private, offline.</div>
+        </div>
+
+        <div class="grant-row">
+          <div class="grant-cell gc-wish"><span class="lbl">Wish</span>
+            Don't interrupt me, but let me fix a wrong guess.</div>
+          <div class="grant-cell gc-curse"><span class="lbl">Curse</span>
+            Granted — a popup that nags, or one that vanishes too fast.</div>
+          <div class="grant-cell gc-patch"><span class="lbl">Patch</span>
+            Transient toast under the menu-bar icon showing the auto title + category with an Edit button; auto-dismisses on a configurable timeout.</div>
+        </div>
+
+        <div class="grant-row">
+          <div class="grant-cell gc-wish"><span class="lbl">Wish</span>
+            And make sure nothing ever collides or gets stranded.</div>
+          <div class="grant-cell gc-curse"><span class="lbl">Curse</span>
+            Granted — but the metadata could trap your notes inside the app.
+            <em>(This tension gets resolved later.)</em></div>
+          <div class="grant-cell gc-patch"><span class="lbl">Patch</span>
+            Each .md note carries YAML frontmatter (title, category, date); filename = slug + timestamp, so files never collide and stay self-contained &amp; portable.</div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. RELAY RACE -->
+  <section class="tech">
+    <div class="tech-head">
+      <span class="tech-num">02</span>
+      <h2 class="tech-title">Ideation Relay Race</h2>
+      <span class="tech-tag">pass the baton, fast</span>
+    </div>
+    <p class="tech-lede">
+      No stopping to deliberate. Each idea hands off to the next runner. The first
+      leg reframes the whole race.
+    </p>
+
+    <div class="relay">
+      <div class="reframe">
+        <span class="tag">⟲ REFRAME — the move that changed everything</span>
+        The app is a thin shell <em>over the filesystem</em>, not a note silo. Notes are plain
+        .md files in a local folder structure, fully editable in any text editor outside the app.
+        The filesystem is the source of truth; the app just creates, updates, organizes.
+      </div>
+
+      <div class="track">
+        <div class="leg">
+          <span class="baton">tension surfaced</span>
+          <div class="body">This challenges the YAML idea. Maybe metadata should live in the structure itself — <b>category = folder, title = filename</b> — to keep the files clean for external editing.</div>
+        </div>
+        <div class="leg">
+          <span class="baton">dates</span>
+          <div class="body">Date metadata comes from the filesystem (created/modified timestamps). No DB needed for dates — reinforces app-as-shell.</div>
+        </div>
+        <div class="leg">
+          <span class="baton">live sync</span>
+          <div class="body">The app watches the store folder and live-reflects external changes (edits, moves, deletes from other tools). True two-way sync with the filesystem.</div>
+        </div>
+        <div class="leg">
+          <span class="baton">open-with</span>
+          <div class="body">Destinations beyond Claude: Gemini and other AI tools, the Zed editor.</div>
+        </div>
+        <div class="leg">
+          <span class="baton">context handoff</span>
+          <div class="body">"Open with" can inject an <b>@-style reference to the note's full path</b> into the target app (e.g. open Claude pre-loaded with <code>@/path/note.md</code> so the session can read the file). Not just launch — hand off context.</div>
+        </div>
+        <div class="leg">
+          <span class="baton">two action types</span>
+          <div class="body"><b>(1) Command</b> — run a shell command with the path as input, e.g. <code>zed {path}</code>. <b>(2) App + input</b> — activate an app, then inject via simulation, either the <code>@{path}</code> reference or the full pasted document text (reuses the existing CGEvent keyboard-sim approach).</div>
+        </div>
+        <div class="leg">
+          <span class="baton">retrieval</span>
+          <div class="body">Fast retrieval = fuzzy search across all note titles.</div>
+        </div>
+        <div class="leg">
+          <span class="baton">default click</span>
+          <div class="body">A user setting controls default click behavior on a note: (a) run the default open command, (b) render markdown in-app, or (c) edit raw text in-app.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. THE DEFECTOR -->
+  <section class="tech">
+    <div class="tech-head">
+      <span class="tech-num invented">03</span>
+      <h2 class="tech-title">The Defector</h2>
+      <span class="tech-tag">invented · positioning</span>
+    </div>
+    <p class="tech-lede">
+      Name a notes app you used and abandoned, and the exact moment it failed you.
+      That failure becomes a feature spec for yours.
+    </p>
+
+    <div class="defect">
+      <div class="escape">
+        <h4>↤ Notion</h4>
+        <div class="fail">Failure: too much. Heavy, structured, a tool that wants to manage you.</div>
+        <div class="spec">Spec → stay minimal. Refuse to become a knowledge base.</div>
+      </div>
+      <div class="escape">
+        <h4>↤ Apple Notes</h4>
+        <div class="fail">Failure: you don't own your data.</div>
+        <div class="spec">Spec → plain local files you fully control.</div>
+      </div>
+
+      <div class="spectrum">
+        Every notes app is either "too much" or "not flexible enough."
+        <div class="bar">
+          <span class="end">too much<br>(Notion)</span>
+          <span class="line"></span>
+          <span class="mid">minimal + flexible + you own the data</span>
+          <span class="line"></span>
+          <span class="end">not flexible<br>enough</span>
+        </div>
+      </div>
+
+      <div class="sand">
+        <div class="label">// GUARDRAIL · NORTH STAR</div>
+        <div class="rule">The line isn't a single feature — it's <b>purpose</b>. This stays a quick
+        <b>personal</b> note app and never drifts into a knowledge-base, document-management, or corp tool.
+        Scope creep = purpose creep.</div>
+      </div>
+
+      <div class="sand" style="background:var(--curse);">
+        <div class="label" style="color:#ffd0d0;">// LINE IN THE SAND · DECISION</div>
+        <div class="rule">Say <b>NO</b> to any feature that requires an account or costs money.
+        Stays free, account-less, local-only. <b>No SaaS dependency.</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. OUTLIVE THE APP -->
+  <section class="tech">
+    <div class="tech-head">
+      <span class="tech-num invented">04</span>
+      <h2 class="tech-title">Outlive the App</h2>
+      <span class="tech-tag">invented · durability</span>
+    </div>
+    <p class="tech-lede">
+      Imagine the app is gone and unmaintained in five years. What must be true of
+      the folder so your notes stay fully usable?
+    </p>
+
+    <div class="outlive">
+      <div class="epitaph">
+        ⟨ here lies ThoughtQueue.app · 2026 – 20XX ⟩<br>
+        the survival test: when the app dies, the only thing lost is <em>convenience</em>.
+      </div>
+      <div class="survive-grid">
+        <div class="col lost">
+          <div class="col-h">✕ acceptable to lose</div>
+          <ul class="stack">
+            <li>Quick taskbar access</li>
+            <li>The toast popups</li>
+            <li>The local LLM auto-smarts</li>
+            <li>The search index</li>
+            <li>App configs</li>
+          </ul>
+        </div>
+        <div class="col kept">
+          <div class="col-h">✓ never lost</div>
+          <ul class="stack">
+            <li>The .md notes themselves</li>
+            <li>Categories (= folders)</li>
+            <li>Titles (= filenames)</li>
+            <li>Dates (= fs timestamps)</li>
+            <li>Full content &amp; organization</li>
+          </ul>
+        </div>
+      </div>
+      <div class="sand" style="margin-top:20px;">
+        <div class="label">// DECISION · radical data minimalism</div>
+        <div class="rule">The <b>notes</b> are the only thing worth persisting. Everything else
+        is disposable helper functionality. The store folder should contain <b>only notes</b> —
+        no app-specific clutter.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. JOB TO BE DONE -->
+  <section class="tech">
+    <div class="tech-head">
+      <span class="tech-num">05</span>
+      <h2 class="tech-title">Job to Be Done</h2>
+      <span class="tech-tag">real usage moments</span>
+    </div>
+    <p class="tech-lede">
+      Forget features for a second. What are you actually hiring this app to do, in
+      the moment, in real life?
+    </p>
+
+    <div class="jobs">
+      <div class="job">
+        <p class="quote">"In a meeting, capture todo-list notes for later reference, so I can look things up and get people answers."</p>
+        <div class="deco">Underlying job → <b>grab actionable todos fast mid-meeting</b>, then retrieve to follow up. Implies markdown checkboxes / todo items + easy retrieval of action items.</div>
+      </div>
+      <div class="job">
+        <p class="quote">"When I see text I want to reference later or build into a spec/plan/document, capture it, so I can later find it and assemble it into a document."</p>
+        <div class="deco">Underlying job → <b>collect fragments over time and accrete them into a larger doc.</b></div>
+      </div>
+      <div class="job">
+        <div class="deco" style="margin-bottom:8px;color:var(--accent-2);">design response</div>
+        Capture supports <b>both modes</b>: create a new standalone note, <em>or</em> append the captured
+        text onto an existing note you're already building — serving the accretive "grow a doc from
+        fragments" job without bespoke document-management features.
+        <div class="deco" style="margin-top:10px;">Append-target selection → a popup picker to choose which note to append to.</div>
+      </div>
+
+      <div class="working-doc">
+        <div class="label">// THE WORKING DOCUMENT</div>
+        <div class="h">A designated "working" doc as the default sink</div>
+        <p>You can quickly designate a current catch-all where all captures land by default
+        unless a different target is specified. A powerful default that serves the accretive job
+        with near-zero friction.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SYNTHESIS CLIMAX -->
+  <section class="synth">
+    <p class="kicker">Synthesis · the payoff</p>
+    <h2>It was one architecture all along.</h2>
+
+    <div class="synth-grid">
+      <div class="finding">
+        <div class="id">connection 01</div>
+        <div class="t">The working document closes the genie's curse</div>
+        <p>The default-sink "working doc" resolves the original Cursed-Genie tension. It delivers
+        capture-without-thinking (zero decisions) <em>and</em> avoids the nameless-landfill problem,
+        because captures accrete into a known target instead of spawning orphan notes.</p>
+      </div>
+
+      <div class="finding">
+        <div class="id">connection 02</div>
+        <div class="t">Three ideas were really one</div>
+        <p>App-as-shell, filesystem-as-database (folder / filename / timestamp), and
+        "notes are the only durable thing" are a single coherent architecture: <em>radical portability.</em></p>
+      </div>
+
+      <div class="finding">
+        <div class="id">connection 03</div>
+        <div class="t">The real breakthrough = context handoff</div>
+        <p>The breakthrough feature is <b>open-with-as-context-handoff</b> — the <code>@path</code>
+        reference into Claude — not the basic launcher. It's what makes this <em>more</em> than a
+        notes app while staying minimal.</p>
+      </div>
+
+      <div class="finding">
+        <div class="id">connection 04</div>
+        <div class="t">Killing frontmatter keeps it honest</div>
+        <p>Dropping YAML frontmatter to keep files clean for external editing is the move that makes
+        the whole filesystem-shell philosophy internally consistent.</p>
+      </div>
+    </div>
+
+    <div class="architecture">
+<span class="c"># the durable truth — one folder, no app required</span><br>
+~/Notes/<br>
+├── Meetings/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c"># category = folder</span><br>
+│&nbsp;&nbsp;└── standup-2026-06-24.md&nbsp;&nbsp;<span class="c"># title = filename · date = fs timestamp</span><br>
+├── working.md&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="a"># default sink — captures accrete here</span><br>
+└── specs/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;└── notes-app.md<br>
+<br>
+<span class="c"># open with →</span> <span class="a">claude  @~/Notes/specs/notes-app.md</span>&nbsp;&nbsp;<span class="c"># hand off context</span><br>
+<span class="c"># open with →</span> <span class="a">zed ~/Notes/working.md</span>
+    </div>
+
+    <div class="chosen">
+      ▶ CHOSEN DIRECTION: generate this HTML keepsake + an intent doc capturing all findings.
+      The session belongs to you — these are <b>your</b> ideas, hardened into one direction.
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <span class="prompt">$</span> echo "the app is the convenience. the notes are the truth."<br>
+    brainstorm-thoughtqueue-quicknotes · 2026-06-24 · facilitator mode · 5 techniques
+  </div>
+</footer>
+
+</body>
+</html>

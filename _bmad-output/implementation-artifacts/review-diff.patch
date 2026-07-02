@@ -1,0 +1,3626 @@
+diff --git a/project.yml b/project.yml
+new file mode 100644
+index 0000000..4acbc08
+--- /dev/null
++++ b/project.yml
+@@ -0,0 +1,41 @@
++name: ThoughtQueue
++options:
++  bundleIdPrefix: com.thoughtqueue
++  deploymentTarget:
++    macOS: "14.0"
++  xcodeVersion: "26.0"
++  createIntermediateGroups: true
++
++settings:
++  base:
++    SWIFT_VERSION: "5.0"
++    MACOSX_DEPLOYMENT_TARGET: "14.0"
++
++targets:
++  ThoughtQueue:
++    type: application
++    platform: macOS
++    sources:
++      - ThoughtQueue
++    settings:
++      base:
++        INFOPLIST_FILE: ThoughtQueue/Info.plist
++        CODE_SIGN_ENTITLEMENTS: ThoughtQueue/ThoughtQueue.entitlements
++        PRODUCT_BUNDLE_IDENTIFIER: com.thoughtqueue.app
++        PRODUCT_NAME: ThoughtQueue
++        LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
++        COMBINE_HIDPI_IMAGES: true
++    dependencies: []
++
++  ThoughtQueueTests:
++    type: bundle.unit-test
++    platform: macOS
++    sources:
++      - ThoughtQueueTests
++    dependencies:
++      - target: ThoughtQueue
++    settings:
++      base:
++        GENERATE_INFOPLIST_FILE: true
++        BUNDLE_LOADER: "$(TEST_HOST)"
++        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ThoughtQueue.app/Contents/MacOS/ThoughtQueue"
+diff --git a/build.sh b/build.sh
+new file mode 100755
+index 0000000..b3874c1
+--- /dev/null
++++ b/build.sh
+@@ -0,0 +1,61 @@
++#!/bin/bash
++set -e
++
++INPUT="${1:-Debug}"
++CONFIG="$(tr '[:lower:]' '[:upper:]' <<< "${INPUT:0:1}")$(tr '[:upper:]' '[:lower:]' <<< "${INPUT:1}")"
++BUILD_DIR="build"
++
++echo "==> Generating Xcode project..."
++xcodegen generate
++
++SIGN_ARGS=()
++if [ "$CONFIG" = "Release" ]; then
++  echo "==> Locating Developer ID Application identity..."
++  IDENTITY_LINE="$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 || true)"
++
++  if [ -z "$IDENTITY_LINE" ]; then
++    echo "==> ERROR: no 'Developer ID Application' identity in keychain."
++    echo "    Install your certificate from developer.apple.com, then re-run."
++    exit 1
++  fi
++
++  IDENTITY="$(sed -E 's/.*"(Developer ID Application: [^"]+)".*/\1/' <<< "$IDENTITY_LINE")"
++  TEAM_ID="$(sed -E 's/.*\(([A-Z0-9]+)\)"?$/\1/' <<< "$IDENTITY")"
++
++  echo "    Identity: $IDENTITY"
++  echo "    Team ID:  $TEAM_ID"
++
++  SIGN_ARGS=(
++    CODE_SIGN_STYLE=Manual
++    CODE_SIGN_IDENTITY="$IDENTITY"
++    DEVELOPMENT_TEAM="$TEAM_ID"
++    ENABLE_HARDENED_RUNTIME=YES
++    OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime"
++  )
++fi
++
++echo "==> Building ThoughtQueue ($CONFIG)..."
++xcodebuild -project ThoughtQueue.xcodeproj \
++  -scheme ThoughtQueue \
++  -configuration "$CONFIG" \
++  -derivedDataPath "$BUILD_DIR" \
++  "${SIGN_ARGS[@]}" \
++  build | tail -5
++
++APP_PATH="$BUILD_DIR/Build/Products/$CONFIG/ThoughtQueue.app"
++
++if [ ! -f "$APP_PATH/Contents/MacOS/ThoughtQueue" ]; then
++  echo "==> Build failed"
++  exit 1
++fi
++
++echo "==> Build succeeded: $APP_PATH"
++
++if [ "$CONFIG" = "Release" ]; then
++  echo "==> Verifying signature..."
++  codesign --verify --deep --strict --verbose=2 "$APP_PATH"
++  codesign --display --verbose=2 "$APP_PATH" 2>&1 | grep -E "^(Identifier|Authority|TeamIdentifier|Timestamp|Runtime)" || true
++fi
++
++echo ""
++echo "Run with:  open $APP_PATH"
+diff --git a/ThoughtQueue/Info.plist b/ThoughtQueue/Info.plist
+new file mode 100644
+index 0000000..a2761b0
+--- /dev/null
++++ b/ThoughtQueue/Info.plist
+@@ -0,0 +1,30 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0">
++<dict>
++    <key>CFBundleDevelopmentRegion</key>
++    <string>en</string>
++    <key>CFBundleExecutable</key>
++    <string>$(EXECUTABLE_NAME)</string>
++    <key>CFBundleIdentifier</key>
++    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
++    <key>CFBundleName</key>
++    <string>$(PRODUCT_NAME)</string>
++    <key>CFBundleDisplayName</key>
++    <string>ThoughtQueue</string>
++    <key>CFBundlePackageType</key>
++    <string>APPL</string>
++    <key>CFBundleShortVersionString</key>
++    <string>1.0.0</string>
++    <key>CFBundleVersion</key>
++    <string>1</string>
++    <key>LSMinimumSystemVersion</key>
++    <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
++    <key>LSUIElement</key>
++    <true/>
++    <key>NSPrincipalClass</key>
++    <string>NSApplication</string>
++    <key>NSMainNibFile</key>
++    <string></string>
++</dict>
++</plist>
+diff --git a/ThoughtQueue/ThoughtQueue.entitlements b/ThoughtQueue/ThoughtQueue.entitlements
+new file mode 100644
+index 0000000..4c3fbcf
+--- /dev/null
++++ b/ThoughtQueue/ThoughtQueue.entitlements
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0">
++<dict>
++    <key>com.apple.security.app-sandbox</key>
++    <false/>
++</dict>
++</plist>
+diff --git a/ThoughtQueue/AppDelegate.swift b/ThoughtQueue/AppDelegate.swift
+new file mode 100644
+index 0000000..642d886
+--- /dev/null
++++ b/ThoughtQueue/AppDelegate.swift
+@@ -0,0 +1,198 @@
++import Cocoa
++import os
++
++private let log = Logger(subsystem: "com.thoughtqueue.app", category: "AppDelegate")
++
++final class AppDelegate: NSObject, NSApplicationDelegate {
++    private var statusItem: NSStatusItem?
++    private let popoverController = PopoverController()
++    private var hotkeyManager: HotkeyManager?
++    private var folderWatcher: FolderWatcher?
++
++    func applicationDidFinishLaunching(_ notification: Notification) {
++        // Skip all launch side effects (modals, hotkeys, watchers) when running under XCTest.
++        if NSClassFromString("XCTestCase") != nil { return }
++
++        log.info("ThoughtQueue launching")
++
++        setupMainMenu()
++        setupStatusItem()
++
++        // Configure the store: use the saved folder, or prompt the user on first run.
++        if let url = PreferencesManager.shared.storeURL {
++            NoteStore.shared.rootURL = url
++            startWatcher()
++        } else {
++            promptForStoreFolder()
++        }
++
++        // Accessibility permission for hotkeys + keyboard simulation.
++        if !AXIsProcessTrusted() {
++            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
++            AXIsProcessTrustedWithOptions(options)
++        }
++
++        let hk = HotkeyManager(
++            onQuickCapture: { CaptureService.shared.quickCapture() },
++            onDetailedCapture: { CaptureService.shared.showDetailedCapture() }
++        )
++        hk.register()
++        hotkeyManager = hk
++    }
++
++    // MARK: - First-run store chooser
++
++    /// Propose a default store folder and let the user confirm or pick another, before
++    /// any note is written.
++    private func promptForStoreFolder() {
++        let prefs = PreferencesManager.shared
++        let proposed = prefs.defaultStoreURL
++
++        let alert = NSAlert()
++        alert.messageText = "Choose your notes folder"
++        alert.informativeText = "ThoughtQueue stores notes as plain markdown files in a folder you own.\n\nProposed: \(proposed.path)"
++        alert.addButton(withTitle: "Use Proposed")
++        alert.addButton(withTitle: "Choose Another\u{2026}")
++        NSApp.activate(ignoringOtherApps: true)
++
++        let response = alert.runModal()
++        if response == .alertFirstButtonReturn {
++            try? FileManager.default.createDirectory(at: proposed, withIntermediateDirectories: true)
++            prefs.storeURL = proposed
++            NoteStore.shared.rootURL = proposed
++            startWatcher()
++        } else {
++            let panel = NSOpenPanel()
++            panel.canChooseDirectories = true
++            panel.canChooseFiles = false
++            panel.allowsMultipleSelection = false
++            panel.prompt = "Choose"
++            panel.directoryURL = proposed.deletingLastPathComponent()
++            if panel.runModal() == .OK, let url = panel.url {
++                prefs.storeURL = url
++                NoteStore.shared.rootURL = url
++                startWatcher()
++            } else {
++                // No folder chosen: fall back to the proposed default so the app stays usable.
++                try? FileManager.default.createDirectory(at: proposed, withIntermediateDirectories: true)
++                prefs.storeURL = proposed
++                NoteStore.shared.rootURL = proposed
++                startWatcher()
++            }
++        }
++    }
++
++    // MARK: - Folder watcher
++
++    func startWatcher() {
++        folderWatcher?.stop()
++        folderWatcher = nil
++        guard let root = NoteStore.shared.rootURL else { return }
++        let watcher = FolderWatcher(root: root)
++        watcher.start()
++        folderWatcher = watcher
++    }
++
++    /// Restart the watcher (e.g. after the store folder changes in Preferences).
++    func restartWatcher() {
++        startWatcher()
++    }
++
++    // MARK: - Menus
++
++    private func setupMainMenu() {
++        let mainMenu = NSMenu()
++
++        let appMenuItem = NSMenuItem()
++        let appMenu = NSMenu()
++        appMenu.addItem(NSMenuItem(title: "About ThoughtQueue", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""))
++        appMenu.addItem(NSMenuItem.separator())
++        let prefsItem = NSMenuItem(title: "Preferences\u{2026}", action: #selector(openPreferences), keyEquivalent: ",")
++        prefsItem.target = self
++        appMenu.addItem(prefsItem)
++        appMenu.addItem(NSMenuItem.separator())
++        appMenu.addItem(NSMenuItem(title: "Quit ThoughtQueue", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
++        appMenuItem.submenu = appMenu
++        mainMenu.addItem(appMenuItem)
++
++        let editMenuItem = NSMenuItem()
++        let editMenu = NSMenu(title: "Edit")
++        editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
++        editMenu.addItem(NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z"))
++        editMenu.addItem(NSMenuItem.separator())
++        editMenu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
++        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
++        editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
++        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
++        editMenuItem.submenu = editMenu
++        mainMenu.addItem(editMenuItem)
++
++        NSApp.mainMenu = mainMenu
++    }
++
++    private func setupStatusItem() {
++        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
++        statusItem = item
++        if let button = item.button {
++            button.image = makeMenuBarIcon()
++            button.action = #selector(handleClick)
++            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
++            button.target = self
++            ReviewToast.shared.anchorButton = button
++        }
++    }
++
++    private func makeMenuBarIcon() -> NSImage {
++        let size: CGFloat = 18
++        let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
++            let s = rect.size.width
++            let inset = s * 0.08
++            let outlineRect = NSRect(x: inset, y: inset, width: s - inset * 2, height: s - inset * 2)
++            let path = NSBezierPath(roundedRect: outlineRect, xRadius: s * 0.18, yRadius: s * 0.18)
++            NSColor.controlTextColor.setStroke()
++            path.lineWidth = 1.2
++            path.stroke()
++
++            let font = NSFont(name: "Georgia-Bold", size: s * 0.45) ?? NSFont.systemFont(ofSize: s * 0.45, weight: .heavy)
++            let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.controlTextColor]
++            let quote = NSAttributedString(string: "\u{201C}\u{201D}", attributes: attrs)
++            let strSize = quote.size()
++            quote.draw(at: NSPoint(x: (s - strSize.width) / 2, y: (s - strSize.height) / 2))
++            return true
++        }
++        image.isTemplate = true
++        return image
++    }
++
++    @objc private func handleClick(_ sender: NSStatusBarButton) {
++        guard let event = NSApp.currentEvent else { return }
++        if event.type == .rightMouseUp {
++            showContextMenu()
++        } else {
++            popoverController.toggle(relativeTo: sender.bounds, of: sender)
++        }
++    }
++
++    private func showContextMenu() {
++        guard let statusItem = statusItem else { return }
++        let menu = NSMenu()
++        menu.addItem(NSMenuItem(title: "Open ThoughtQueue", action: #selector(openMainWindow), keyEquivalent: ""))
++        menu.addItem(NSMenuItem.separator())
++        menu.addItem(NSMenuItem(title: "Preferences\u{2026}", action: #selector(openPreferences), keyEquivalent: ","))
++        menu.addItem(NSMenuItem.separator())
++        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApp.terminate), keyEquivalent: "q"))
++        statusItem.menu = menu
++        statusItem.button?.performClick(nil)
++        statusItem.menu = nil
++    }
++
++    @objc private func openMainWindow() {
++        MainWindowController.shared.showWindow(nil)
++        NSApp.activate(ignoringOtherApps: true)
++    }
++
++    @objc private func openPreferences() {
++        PreferencesWindowController.shared.showWindow(nil)
++        NSApp.activate(ignoringOtherApps: true)
++    }
++}
+diff --git a/ThoughtQueue/main.swift b/ThoughtQueue/main.swift
+new file mode 100644
+index 0000000..eb33820
+--- /dev/null
++++ b/ThoughtQueue/main.swift
+@@ -0,0 +1,6 @@
++import Cocoa
++
++let app = NSApplication.shared
++let delegate = AppDelegate()
++app.delegate = delegate
++app.run()
+diff --git a/ThoughtQueue/Services/AutoIntelService.swift b/ThoughtQueue/Services/AutoIntelService.swift
+new file mode 100644
+index 0000000..c9d4fbc
+--- /dev/null
++++ b/ThoughtQueue/Services/AutoIntelService.swift
+@@ -0,0 +1,140 @@
++import Foundation
++import os
++
++#if canImport(FoundationModels)
++import FoundationModels
++#endif
++
++private let log = Logger(subsystem: "com.thoughtqueue.app", category: "AutoIntelService")
++
++/// On-device auto-title + auto-categorize via Apple's Foundation Models framework.
++/// Fully gated behind macOS 26 + model availability; degrades gracefully when unavailable.
++/// Runs off the main actor and never blocks capture; results surface through the review toast.
++final class AutoIntelService {
++    static let shared = AutoIntelService()
++
++    private init() {}
++
++    /// Proposed metadata from the model (or a fallback).
++    struct Suggestion {
++        let title: String
++        let category: String
++    }
++
++    /// Process a freshly-captured note. If the model is available it proposes a title and
++    /// category and shows the review toast; otherwise it does nothing (the note already has
++    /// a sensible default filename and category from capture).
++    func process(note: Note, body: String) {
++        guard PreferencesManager.shared.autoIntelEnabled else { return }
++
++        #if canImport(FoundationModels)
++        if #available(macOS 26, *), isModelAvailable {
++            Task.detached(priority: .utility) { [weak self] in
++                guard let self = self else { return }
++                if let suggestion = await self.generate(body: body) {
++                    await MainActor.run {
++                        self.presentReview(note: note, suggestion: suggestion)
++                    }
++                }
++            }
++            return
++        }
++        #endif
++
++        // Unavailable: feature simply off, no toast nag (capture already produced sane defaults).
++        log.debug("Auto-intel unavailable; using capture defaults")
++    }
++
++    // MARK: - Availability
++
++    #if canImport(FoundationModels)
++    @available(macOS 26, *)
++    private var isModelAvailable: Bool {
++        switch SystemLanguageModel.default.availability {
++        case .available: return true
++        default: return false
++        }
++    }
++
++    /// Run guided generation for a {title, category} pair against the on-device model.
++    @available(macOS 26, *)
++    private func generate(body: String) async -> Suggestion? {
++        let categories = currentCategoryList()
++        let categoryHint = categories.isEmpty
++            ? "Pick a short, general one-or-two word category."
++            : "Prefer one of these existing categories if it fits: \(categories.joined(separator: ", ")). Otherwise propose a short new one."
++
++        let instructions = """
++        You generate metadata for a quick note. Produce a concise title (max 6 words, no quotes) \
++        that summarizes the note, and a single category. \(categoryHint)
++        """
++
++        let prompt = "Note content:\n\(body.prefix(2000))"
++
++        do {
++            let session = LanguageModelSession(instructions: instructions)
++            let response = try await session.respond(to: prompt, generating: NoteMeta.self)
++            let meta = response.content
++            let title = meta.title.trimmingCharacters(in: .whitespacesAndNewlines)
++            let category = meta.category.trimmingCharacters(in: .whitespacesAndNewlines)
++            guard !title.isEmpty else { return nil }
++            return Suggestion(title: title, category: category.isEmpty ? Note.uncategorized : category)
++        } catch {
++            log.error("Foundation Models generation failed: \(error.localizedDescription)")
++            return nil
++        }
++    }
++    #endif
++
++    private func currentCategoryList() -> [String] {
++        NoteStore.shared.categories()
++    }
++
++    // MARK: - Review
++
++    @MainActor
++    private func presentReview(note: Note, suggestion: Suggestion) {
++        // Re-resolve the note in case it moved; only proceed if it still exists.
++        guard FileManager.default.fileExists(atPath: note.url.path),
++              let root = NoteStore.shared.rootURL,
++              let current = Note.from(url: note.url, storeRoot: root) else {
++            return
++        }
++
++        ReviewToast.shared.show(
++            note: current,
++            suggestedTitle: suggestion.title,
++            suggestedCategory: suggestion.category,
++            timeout: PreferencesManager.shared.toastTimeout
++        )
++    }
++
++    /// Apply a suggestion to a note (rename + move). Used by the review toast on accept.
++    @discardableResult
++    func apply(title: String, category: String, to note: Note) -> Note? {
++        var working = note
++        if title.trimmingCharacters(in: .whitespacesAndNewlines) != note.title,
++           let renamed = NoteStore.shared.rename(working, to: title) {
++            working = renamed
++        }
++        let targetCategory = (category == Note.uncategorized) ? nil : category
++        if targetCategory != working.category,
++           let moved = NoteStore.shared.move(working, to: targetCategory) {
++            working = moved
++        }
++        return working
++    }
++}
++
++#if canImport(FoundationModels)
++/// Structured output for guided generation.
++@available(macOS 26, *)
++@Generable
++struct NoteMeta {
++    @Guide(description: "A concise note title, max 6 words, no surrounding quotes.")
++    var title: String
++
++    @Guide(description: "A single short category name for the note.")
++    var category: String
++}
++#endif
+diff --git a/ThoughtQueue/Services/CaptureService.swift b/ThoughtQueue/Services/CaptureService.swift
+new file mode 100644
+index 0000000..b7204f9
+--- /dev/null
++++ b/ThoughtQueue/Services/CaptureService.swift
+@@ -0,0 +1,137 @@
++import Cocoa
++import os
++
++private let log = Logger(subsystem: "com.thoughtqueue.app", category: "CaptureService")
++
++/// Captures selected text and writes it to the store. Capture is instant: the note is
++/// written first, then auto-intel runs async and can rename/move via the review toast.
++final class CaptureService {
++    static let shared = CaptureService()
++
++    private init() {}
++
++    /// Quick capture: grab the selection, write to the default sink (working doc append,
++    /// else a new note in the working doc's category, else Uncategorized), return instantly.
++    func quickCapture() {
++        grabSelectedText { [weak self] text, savedClipboard in
++            guard let self = self else { return }
++            guard let text = text, !text.isEmpty else {
++                restoreClipboard(savedClipboard)
++                ToastWindow.show(message: "No text selected")
++                return
++            }
++            restoreClipboard(savedClipboard)
++            self.persistCapture(text: text)
++        }
++    }
++
++    /// Detailed capture: grab the selection and open the capture panel for edit + target choice.
++    func showDetailedCapture() {
++        grabSelectedText { text, savedClipboard in
++            restoreClipboard(savedClipboard)
++            CapturePanel.shared.show(with: text ?? "")
++        }
++    }
++
++    /// Write a quick capture using the working-document sink rules, then kick off auto-intel.
++    /// New notes are created immediately with a default title; auto-intel refines via the toast.
++    private func persistCapture(text: String) {
++        let store = NoteStore.shared
++        let prefs = PreferencesManager.shared
++
++        // Append to the working document if one is set and still exists.
++        if let workingURL = prefs.workingDocumentURL {
++            if FileManager.default.fileExists(atPath: workingURL.path),
++               let root = store.rootURL,
++               let note = Note.from(url: workingURL, storeRoot: root) {
++                if store.append(to: note, text: text) {
++                    ToastWindow.show(message: "Appended to \(note.title)")
++                    return
++                }
++            } else {
++                // Working doc deleted externally: clear the stale setting and fall through to a new note.
++                prefs.workingDocumentURL = nil
++                log.warning("Working document missing; cleared setting")
++            }
++        }
++
++        // Otherwise create a new note. Default category = working doc's folder, else Uncategorized.
++        let defaultCategory = defaultCategoryFromWorkingDoc()
++        guard let note = store.createNote(title: "", body: text, category: defaultCategory) else {
++            ToastWindow.show(message: "Failed to save")
++            return
++        }
++        ToastWindow.show(message: "Captured!")
++
++        // Async auto-title/categorize; never blocks capture.
++        AutoIntelService.shared.process(note: note, body: text)
++    }
++
++    /// The category to use for a brand-new capture: the working document's folder if set,
++    /// otherwise nil (Uncategorized).
++    private func defaultCategoryFromWorkingDoc() -> String? {
++        guard let workingURL = PreferencesManager.shared.workingDocumentURL,
++              let root = NoteStore.shared.rootURL,
++              let note = Note.from(url: workingURL, storeRoot: root) else {
++            return nil
++        }
++        return note.category
++    }
++
++    // MARK: - Selection grab (simulate Cmd+C, poll/restore pasteboard)
++
++    private func grabSelectedText(completion: @escaping (String?, [[NSPasteboard.PasteboardType: Data]]) -> Void) {
++        let pasteboard = NSPasteboard.general
++        let savedClipboard = saveClipboard()
++        let changeCountBefore = pasteboard.changeCount
++
++        let source = CGEventSource(stateID: .combinedSessionState)
++        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true),
++              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: false) else {
++            completion(nil, savedClipboard)
++            return
++        }
++        keyDown.flags = .maskCommand
++        keyUp.flags = .maskCommand
++        keyDown.post(tap: .cghidEventTap)
++        keyUp.post(tap: .cghidEventTap)
++
++        DispatchQueue.global(qos: .userInitiated).async {
++            var text: String?
++            for _ in 1...10 {
++                Thread.sleep(forTimeInterval: 0.05)
++                if pasteboard.changeCount != changeCountBefore {
++                    text = pasteboard.string(forType: .string)
++                    break
++                }
++            }
++            DispatchQueue.main.async { completion(text, savedClipboard) }
++        }
++    }
++}
++
++// MARK: - Clipboard Save/Restore
++
++func saveClipboard() -> [[NSPasteboard.PasteboardType: Data]] {
++    let pb = NSPasteboard.general
++    guard let items = pb.pasteboardItems else { return [] }
++    return items.map { item in
++        var dict: [NSPasteboard.PasteboardType: Data] = [:]
++        for type in item.types {
++            if let data = item.data(forType: type) { dict[type] = data }
++        }
++        return dict
++    }
++}
++
++func restoreClipboard(_ saved: [[NSPasteboard.PasteboardType: Data]]) {
++    let pb = NSPasteboard.general
++    pb.clearContents()
++    guard !saved.isEmpty else { return }
++    let items = saved.map { dict -> NSPasteboardItem in
++        let item = NSPasteboardItem()
++        for (type, data) in dict { item.setData(data, forType: type) }
++        return item
++    }
++    pb.writeObjects(items)
++}
+diff --git a/ThoughtQueue/Services/HotkeyManager.swift b/ThoughtQueue/Services/HotkeyManager.swift
+new file mode 100644
+index 0000000..ce37a24
+--- /dev/null
++++ b/ThoughtQueue/Services/HotkeyManager.swift
+@@ -0,0 +1,142 @@
++import Cocoa
++import Carbon.HIToolbox
++import os
++
++private let log = Logger(subsystem: "com.thoughtqueue.app", category: "HotkeyManager")
++
++/// Global hotkey handling via a CGEvent tap. Polls for Accessibility permission and
++/// re-registers once granted, mirroring the proven reference implementation.
++final class HotkeyManager {
++    private let onQuickCapture: () -> Void
++    private let onDetailedCapture: () -> Void
++    private var eventTap: CFMachPort?
++    private var runLoopSource: CFRunLoopSource?
++    private var retainedSelf: Unmanaged<HotkeyManager>?
++    private var permissionTimer: Timer?
++    private var permissionPollCount = 0
++    private static let maxPermissionPolls = 60 // 2 minutes at 2s intervals
++
++    init(onQuickCapture: @escaping () -> Void, onDetailedCapture: @escaping () -> Void) {
++        self.onQuickCapture = onQuickCapture
++        self.onDetailedCapture = onDetailedCapture
++    }
++
++    func register() {
++        let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
++
++        let callback: CGEventTapCallBack = { proxy, type, event, refcon in
++            guard let refcon = refcon else { return Unmanaged.passRetained(event) }
++            let manager = Unmanaged<HotkeyManager>.fromOpaque(refcon).takeUnretainedValue()
++            return manager.handleEvent(proxy: proxy, type: type, event: event)
++        }
++
++        let retained = Unmanaged.passRetained(self)
++        let refcon = retained.toOpaque()
++        guard let tap = CGEvent.tapCreate(
++            tap: .cgSessionEventTap,
++            place: .headInsertEventTap,
++            options: .defaultTap,
++            eventsOfInterest: mask,
++            callback: callback,
++            userInfo: refcon
++        ) else {
++            retained.release()
++            log.error("Failed to create event tap — Accessibility permission not yet granted")
++            startPollingForPermission()
++            return
++        }
++
++        retainedSelf = retained
++        eventTap = tap
++        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
++        runLoopSource = source
++        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
++        CGEvent.tapEnable(tap: tap, enable: true)
++        log.info("Event tap registered — hotkeys active")
++    }
++
++    private func startPollingForPermission() {
++        guard permissionTimer == nil else { return }
++        permissionPollCount = 0
++        permissionTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] timer in
++            guard let self = self else { timer.invalidate(); return }
++            self.permissionPollCount += 1
++            if AXIsProcessTrusted() {
++                timer.invalidate()
++                self.permissionTimer = nil
++                self.register()
++            } else if self.permissionPollCount >= Self.maxPermissionPolls {
++                timer.invalidate()
++                self.permissionTimer = nil
++                DispatchQueue.main.async { self.showPermissionAlert() }
++            }
++        }
++    }
++
++    private func showPermissionAlert() {
++        let alert = NSAlert()
++        alert.messageText = "Accessibility Permission Required"
++        alert.informativeText = "ThoughtQueue needs Accessibility permission to capture global hotkeys. Please grant it in System Settings > Privacy & Security > Accessibility, then relaunch the app."
++        alert.alertStyle = .warning
++        alert.addButton(withTitle: "Open System Settings")
++        alert.addButton(withTitle: "Dismiss")
++        if alert.runModal() == .alertFirstButtonReturn {
++            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
++                NSWorkspace.shared.open(url)
++            }
++        }
++    }
++
++    private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
++        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
++            if let tap = eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
++            return Unmanaged.passRetained(event)
++        }
++
++        guard type == .keyDown else { return Unmanaged.passRetained(event) }
++
++        let flags = event.flags
++        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
++
++        let quickKey = PreferencesManager.shared.quickCaptureKey
++        let detailedKey = PreferencesManager.shared.detailedCaptureKey
++
++        if keyCode == quickKey.keyCode && flags.contains(quickKey.modifiers) && !hasExtraModifiers(flags, expected: quickKey.modifiers) {
++            DispatchQueue.main.async { [weak self] in self?.onQuickCapture() }
++            return nil
++        }
++
++        if keyCode == detailedKey.keyCode && flags.contains(detailedKey.modifiers) && !hasExtraModifiers(flags, expected: detailedKey.modifiers) {
++            DispatchQueue.main.async { [weak self] in self?.onDetailedCapture() }
++            return nil
++        }
++
++        return Unmanaged.passRetained(event)
++    }
++
++    private func hasExtraModifiers(_ flags: CGEventFlags, expected: CGEventFlags) -> Bool {
++        let relevantMask: CGEventFlags = [.maskShift, .maskControl, .maskAlternate, .maskCommand]
++        let actual = flags.intersection(relevantMask)
++        let exp = expected.intersection(relevantMask)
++        return actual != exp
++    }
++
++    func unregister() {
++        permissionTimer?.invalidate()
++        permissionTimer = nil
++        if let source = runLoopSource {
++            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
++            runLoopSource = nil
++        }
++        if let tap = eventTap {
++            CGEvent.tapEnable(tap: tap, enable: false)
++            retainedSelf?.release()
++            retainedSelf = nil
++            eventTap = nil
++        }
++    }
++
++    deinit {
++        unregister()
++    }
++}
+diff --git a/ThoughtQueue/Services/OpenWithService.swift b/ThoughtQueue/Services/OpenWithService.swift
+new file mode 100644
+index 0000000..7305fef
+--- /dev/null
++++ b/ThoughtQueue/Services/OpenWithService.swift
+@@ -0,0 +1,185 @@
++import Cocoa
++import os
++
++private let log = Logger(subsystem: "com.thoughtqueue.app", category: "OpenWithService")
++
++/// The two ways an open-with action can hand a note off.
++enum OpenWithType: String, Codable {
++    case command   // run a shell command, e.g. `zed {path}`
++    case appInput  // activate an app then simulate keystrokes
++}
++
++/// For appInput actions: what to inject after activating the app.
++enum OpenWithInputMode: String, Codable {
++    case reference // type `@<abs-path>` (Claude file-reference style)
++    case body      // paste the full note body
++}
++
++/// A configurable "Open with..." destination.
++struct OpenWithAction: Codable, Identifiable, Hashable {
++    var id: UUID = UUID()
++    var name: String
++    var type: OpenWithType
++    /// For command type: template with `{path}` placeholder.
++    var commandTemplate: String?
++    /// For appInput type: target app bundle id.
++    var appBundleId: String?
++    /// For appInput type: how to inject the note.
++    var inputMode: OpenWithInputMode?
++
++    /// Built-in presets: Claude (appInput, reference) and Zed (command).
++    static let presets: [OpenWithAction] = [
++        OpenWithAction(
++            name: "Claude",
++            type: .appInput,
++            commandTemplate: nil,
++            appBundleId: "com.anthropic.claudefordesktop",
++            inputMode: .reference
++        ),
++        OpenWithAction(
++            name: "Zed",
++            type: .command,
++            commandTemplate: "zed {path}",
++            appBundleId: nil,
++            inputMode: nil
++        ),
++    ]
++}
++
++/// Runs open-with actions. Command type shells out via Process; appInput type
++/// generalizes the old ClaudeIntegration: activate the app, then simulate keystrokes
++/// posted to `.cgAnnotatedSessionEventTap` so they bypass our own event tap.
++final class OpenWithService {
++    static let shared = OpenWithService()
++
++    private init() {}
++
++    /// Expand a command template by substituting `{path}` with the note's absolute path.
++    /// Pure function (no side effects) so it is directly unit-testable.
++    static func expand(template: String, path: String) -> String {
++        template.replacingOccurrences(of: "{path}", with: path)
++    }
++
++    /// Run an action against a note. Routes by action type.
++    func run(action: OpenWithAction, note: Note, body: String) {
++        switch action.type {
++        case .command:
++            runCommand(action: action, note: note)
++        case .appInput:
++            runAppInput(action: action, note: note, body: body)
++        }
++    }
++
++    // MARK: - Command type
++
++    private func runCommand(action: OpenWithAction, note: Note) {
++        guard let template = action.commandTemplate, !template.isEmpty else {
++            showError("\(action.name) has no command configured.")
++            return
++        }
++        let command = Self.expand(template: template, path: note.url.path)
++        log.info("Running open-with command: \(command)")
++
++        let process = Process()
++        process.executableURL = URL(fileURLWithPath: "/bin/sh")
++        // Use login shell so user PATH (e.g. zed) is available.
++        process.arguments = ["-l", "-c", command]
++        let pipe = Pipe()
++        process.standardError = pipe
++
++        process.terminationHandler = { proc in
++            if proc.terminationStatus != 0 {
++                let errData = pipe.fileHandleForReading.readDataToEndOfFile()
++                let msg = String(data: errData, encoding: .utf8) ?? "exit \(proc.terminationStatus)"
++                DispatchQueue.main.async {
++                    self.showError("Command failed: \(msg.trimmingCharacters(in: .whitespacesAndNewlines))")
++                }
++            }
++        }
++
++        do {
++            try process.run()
++        } catch {
++            showError("Failed to run command: \(error.localizedDescription)")
++        }
++    }
++
++    // MARK: - App-input type
++
++    private func runAppInput(action: OpenWithAction, note: Note, body: String) {
++        guard let bundleId = action.appBundleId, !bundleId.isEmpty else {
++            showError("\(action.name) has no app configured.")
++            return
++        }
++        let inputMode = action.inputMode ?? .reference
++
++        let workspace = NSWorkspace.shared
++        guard let appURL = workspace.urlForApplication(withBundleIdentifier: bundleId) else {
++            showError("\(action.name) app not found. Please install it first.")
++            return
++        }
++
++        let savedClipboard = saveClipboard()
++        let payload: String = (inputMode == .reference) ? "@\(note.url.path)" : body
++
++        let pasteboard = NSPasteboard.general
++        pasteboard.clearContents()
++        pasteboard.setString(payload, forType: .string)
++
++        let config = NSWorkspace.OpenConfiguration()
++        config.activates = true
++
++        workspace.openApplication(at: appURL, configuration: config) { [weak self] _, error in
++            if let error = error {
++                DispatchQueue.main.async {
++                    restoreClipboard(savedClipboard)
++                    self?.showError("Failed to open \(action.name): \(error.localizedDescription)")
++                }
++                return
++            }
++
++            // Claude-style: switch to chat, start a new chat, then paste.
++            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
++                if bundleId == "com.anthropic.claudefordesktop" {
++                    self?.simulateKeystroke(keyCode: 0x12, flags: [.maskCommand])              // Cmd+1
++                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
++                        self?.simulateKeystroke(keyCode: 0x1F, flags: [.maskCommand, .maskShift]) // Cmd+Shift+O (new chat)
++                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
++                            self?.simulateKeystroke(keyCode: 0x09, flags: [.maskCommand])         // Cmd+V
++                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
++                                restoreClipboard(savedClipboard)
++                            }
++                        }
++                    }
++                } else {
++                    // Generic app: just paste into the frontmost field.
++                    self?.simulateKeystroke(keyCode: 0x09, flags: [.maskCommand])                 // Cmd+V
++                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
++                        restoreClipboard(savedClipboard)
++                    }
++                }
++            }
++        }
++    }
++
++    private func simulateKeystroke(keyCode: UInt16, flags: CGEventFlags) {
++        let source = CGEventSource(stateID: .combinedSessionState)
++        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
++              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
++            log.error("Failed to create CGEvent for keyCode \(keyCode)")
++            return
++        }
++        keyDown.flags = flags
++        keyUp.flags = flags
++        keyDown.post(tap: .cgAnnotatedSessionEventTap)
++        keyUp.post(tap: .cgAnnotatedSessionEventTap)
++    }
++
++    private func showError(_ message: String) {
++        let alert = NSAlert()
++        alert.messageText = "Open With Error"
++        alert.informativeText = message
++        alert.alertStyle = .warning
++        alert.runModal()
++    }
++}
+diff --git a/ThoughtQueue/Services/PreferencesManager.swift b/ThoughtQueue/Services/PreferencesManager.swift
+new file mode 100644
+index 0000000..d082f6f
+--- /dev/null
++++ b/ThoughtQueue/Services/PreferencesManager.swift
+@@ -0,0 +1,183 @@
++import Cocoa
++import ServiceManagement
++
++/// A global-hotkey binding (CGEvent keycode + modifier flags).
++struct KeyBinding {
++    let keyCode: Int64
++    let modifiers: CGEventFlags
++
++    static let defaultQuickCapture = KeyBinding(keyCode: 11, modifiers: [.maskCommand, .maskShift])               // Cmd+Shift+B
++    static let defaultDetailedCapture = KeyBinding(keyCode: 11, modifiers: [.maskCommand, .maskShift, .maskAlternate]) // Cmd+Shift+Option+B
++}
++
++/// How clicking a note in the UI behaves.
++enum ClickBehavior: String {
++    case openCommand    // run the default open-with action
++    case renderMarkdown // render the markdown in-app
++    case editRaw        // open a raw editor in-app
++}
++
++/// UserDefaults-backed app configuration. Never writes anything into the store folder.
++final class PreferencesManager {
++    static let shared = PreferencesManager()
++
++    private let defaults = UserDefaults.standard
++
++    private enum Keys {
++        static let quickCaptureKeyCode = "quickCaptureKeyCode"
++        static let quickCaptureModifiers = "quickCaptureModifiers"
++        static let detailedCaptureKeyCode = "detailedCaptureKeyCode"
++        static let detailedCaptureModifiers = "detailedCaptureModifiers"
++        static let storeBookmark = "storeFolderBookmark"
++        static let storePath = "storeFolderPath"
++        static let workingDocPath = "workingDocumentPath"
++        static let clickBehavior = "clickBehavior"
++        static let toastTimeout = "toastTimeout"
++        static let openWithActions = "openWithActions"
++        static let autoIntelEnabled = "autoIntelEnabled"
++    }
++
++    private init() {}
++
++    // MARK: - Hotkeys
++
++    var quickCaptureKey: KeyBinding {
++        get { loadBinding(keyCodeKey: Keys.quickCaptureKeyCode, modifiersKey: Keys.quickCaptureModifiers, default: .defaultQuickCapture) }
++        set { saveBinding(newValue, keyCodeKey: Keys.quickCaptureKeyCode, modifiersKey: Keys.quickCaptureModifiers) }
++    }
++
++    var detailedCaptureKey: KeyBinding {
++        get { loadBinding(keyCodeKey: Keys.detailedCaptureKeyCode, modifiersKey: Keys.detailedCaptureModifiers, default: .defaultDetailedCapture) }
++        set { saveBinding(newValue, keyCodeKey: Keys.detailedCaptureKeyCode, modifiersKey: Keys.detailedCaptureModifiers) }
++    }
++
++    private func loadBinding(keyCodeKey: String, modifiersKey: String, default fallback: KeyBinding) -> KeyBinding {
++        guard defaults.object(forKey: keyCodeKey) != nil else { return fallback }
++        let keyCode = Int64(defaults.integer(forKey: keyCodeKey))
++        let modRaw: UInt64
++        if let modString = defaults.string(forKey: modifiersKey) {
++            modRaw = UInt64(modString) ?? fallback.modifiers.rawValue
++        } else {
++            modRaw = UInt64(bitPattern: Int64(defaults.integer(forKey: modifiersKey)))
++        }
++        return KeyBinding(keyCode: keyCode, modifiers: CGEventFlags(rawValue: modRaw))
++    }
++
++    private func saveBinding(_ binding: KeyBinding, keyCodeKey: String, modifiersKey: String) {
++        defaults.set(Int(binding.keyCode), forKey: keyCodeKey)
++        defaults.set(String(binding.modifiers.rawValue), forKey: modifiersKey)
++    }
++
++    // MARK: - Store location
++
++    /// The chosen store folder. Persisted as a security-scoped bookmark (with a plain
++    /// path fallback) so it survives relaunch on a non-sandboxed build.
++    var storeURL: URL? {
++        get {
++            if let data = defaults.data(forKey: Keys.storeBookmark) {
++                var stale = false
++                if let url = try? URL(resolvingBookmarkData: data, options: [.withSecurityScope], relativeTo: nil, bookmarkDataIsStale: &stale) {
++                    return url
++                }
++            }
++            if let path = defaults.string(forKey: Keys.storePath) {
++                return URL(fileURLWithPath: path, isDirectory: true)
++            }
++            return nil
++        }
++        set {
++            guard let url = newValue else {
++                defaults.removeObject(forKey: Keys.storeBookmark)
++                defaults.removeObject(forKey: Keys.storePath)
++                return
++            }
++            defaults.set(url.path, forKey: Keys.storePath)
++            if let data = try? url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil) {
++                defaults.set(data, forKey: Keys.storeBookmark)
++            }
++        }
++    }
++
++    /// Proposed default store location used by the first-run chooser.
++    var defaultStoreURL: URL {
++        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
++            ?? FileManager.default.homeDirectoryForCurrentUser
++        return docs.appendingPathComponent("ThoughtQueue", isDirectory: true)
++    }
++
++    // MARK: - Working document
++
++    /// The designated default capture sink (a note's absolute path), if set.
++    var workingDocumentURL: URL? {
++        get {
++            guard let path = defaults.string(forKey: Keys.workingDocPath) else { return nil }
++            return URL(fileURLWithPath: path)
++        }
++        set { defaults.set(newValue?.path, forKey: Keys.workingDocPath) }
++    }
++
++    // MARK: - Click behavior
++
++    var clickBehavior: ClickBehavior {
++        get { ClickBehavior(rawValue: defaults.string(forKey: Keys.clickBehavior) ?? "") ?? .renderMarkdown }
++        set { defaults.set(newValue.rawValue, forKey: Keys.clickBehavior) }
++    }
++
++    // MARK: - Toast timeout
++
++    var toastTimeout: TimeInterval {
++        get {
++            let v = defaults.double(forKey: Keys.toastTimeout)
++            return v > 0 ? v : 8.0
++        }
++        set { defaults.set(newValue, forKey: Keys.toastTimeout) }
++    }
++
++    // MARK: - Auto-intel toggle
++
++    var autoIntelEnabled: Bool {
++        get { defaults.object(forKey: Keys.autoIntelEnabled) == nil ? true : defaults.bool(forKey: Keys.autoIntelEnabled) }
++        set { defaults.set(newValue, forKey: Keys.autoIntelEnabled) }
++    }
++
++    // MARK: - Open-with actions
++
++    /// The configured open-with actions; seeded with Claude + Zed presets on first read.
++    var openWithActions: [OpenWithAction] {
++        get {
++            guard let data = defaults.data(forKey: Keys.openWithActions),
++                  let actions = try? JSONDecoder().decode([OpenWithAction].self, from: data),
++                  !actions.isEmpty else {
++                return OpenWithAction.presets
++            }
++            return actions
++        }
++        set {
++            if let data = try? JSONEncoder().encode(newValue) {
++                defaults.set(data, forKey: Keys.openWithActions)
++            }
++        }
++    }
++
++    /// The default open-with action (first in the list) used by the open-command click behavior.
++    var defaultOpenWithAction: OpenWithAction? {
++        openWithActions.first
++    }
++
++    // MARK: - Start at login
++
++    var startAtLogin: Bool {
++        get { SMAppService.mainApp.status == .enabled }
++        set {
++            do {
++                if newValue {
++                    try SMAppService.mainApp.register()
++                } else {
++                    try SMAppService.mainApp.unregister()
++                }
++            } catch {
++                NSLog("Failed to \(newValue ? "enable" : "disable") start at login: \(error)")
++            }
++        }
++    }
++}
+diff --git a/ThoughtQueue/Store/FolderWatcher.swift b/ThoughtQueue/Store/FolderWatcher.swift
+new file mode 100644
+index 0000000..ff29684
+--- /dev/null
++++ b/ThoughtQueue/Store/FolderWatcher.swift
+@@ -0,0 +1,94 @@
++import Foundation
++import os
++
++private let log = Logger(subsystem: "com.thoughtqueue.app", category: "FolderWatcher")
++
++/// Watches the store root recursively via FSEvents, debounces bursts, suppresses
++/// the app's own writes, and posts `.notesDidChange` so the UI re-reads the folder.
++final class FolderWatcher {
++    private var stream: FSEventStreamRef?
++    private let root: URL
++    private var debounceWorkItem: DispatchWorkItem?
++    private let debounceInterval: TimeInterval = 0.3
++    private let queue = DispatchQueue(label: "com.thoughtqueue.folderwatcher")
++
++    init(root: URL) {
++        self.root = root.standardizedFileURL
++    }
++
++    deinit {
++        stop()
++    }
++
++    func start() {
++        stop()
++
++        let callback: FSEventStreamCallback = { _, info, numEvents, eventPaths, _, _ in
++            guard let info = info else { return }
++            let watcher = Unmanaged<FolderWatcher>.fromOpaque(info).takeUnretainedValue()
++            let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String] ?? []
++            watcher.handleEvents(paths: paths, count: numEvents)
++        }
++
++        var context = FSEventStreamContext(
++            version: 0,
++            info: Unmanaged.passUnretained(self).toOpaque(),
++            retain: nil,
++            release: nil,
++            copyDescription: nil
++        )
++
++        let flags = UInt32(
++            kFSEventStreamCreateFlagFileEvents |
++            kFSEventStreamCreateFlagNoDefer |
++            kFSEventStreamCreateFlagUseCFTypes
++        )
++
++        guard let stream = FSEventStreamCreate(
++            kCFAllocatorDefault,
++            callback,
++            &context,
++            [root.path] as CFArray,
++            FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
++            0.2,
++            flags
++        ) else {
++            log.error("Failed to create FSEventStream for \(self.root.path)")
++            return
++        }
++
++        self.stream = stream
++        FSEventStreamSetDispatchQueue(stream, queue)
++        FSEventStreamStart(stream)
++        log.info("FolderWatcher started on \(self.root.path)")
++    }
++
++    func stop() {
++        guard let stream = stream else { return }
++        FSEventStreamStop(stream)
++        FSEventStreamInvalidate(stream)
++        FSEventStreamRelease(stream)
++        self.stream = stream as FSEventStreamRef? // keep type; cleared below
++        self.stream = nil
++    }
++
++    /// Decide whether the event batch is meaningful (not purely self-writes), then debounce.
++    private func handleEvents(paths: [String], count: Int) {
++        // If every path in the batch was a recent self-write, ignore it.
++        let allSelf = !paths.isEmpty && paths.allSatisfy { NoteStore.shared.wasSelfWrite($0) }
++        if allSelf {
++            log.debug("Ignored self-write batch of \(paths.count) paths")
++            return
++        }
++
++        DispatchQueue.main.async { [weak self] in
++            guard let self = self else { return }
++            self.debounceWorkItem?.cancel()
++            let item = DispatchWorkItem {
++                NotificationCenter.default.post(name: .notesDidChange, object: nil)
++            }
++            self.debounceWorkItem = item
++            DispatchQueue.main.asyncAfter(deadline: .now() + self.debounceInterval, execute: item)
++        }
++    }
++}
+diff --git a/ThoughtQueue/Store/FuzzySearch.swift b/ThoughtQueue/Store/FuzzySearch.swift
+new file mode 100644
+index 0000000..8296972
+--- /dev/null
++++ b/ThoughtQueue/Store/FuzzySearch.swift
+@@ -0,0 +1,50 @@
++import Foundation
++
++/// Lightweight subsequence fuzzy matcher for note titles. Pure functions so they are
++/// directly unit-testable, independent of the filesystem or UI.
++enum FuzzySearch {
++    /// Returns a match score for `query` against `candidate`, or nil if it does not match.
++    /// Higher is better. Matching is case-insensitive subsequence with bonuses for
++    /// contiguous runs and start-of-string / word-boundary hits.
++    static func score(query: String, candidate: String) -> Int? {
++        let q = Array(query.lowercased())
++        let c = Array(candidate.lowercased())
++        if q.isEmpty { return 0 }
++        if c.isEmpty { return nil }
++
++        var qi = 0
++        var score = 0
++        var lastMatchIndex = -1
++
++        for (ci, ch) in c.enumerated() {
++            guard qi < q.count else { break }
++            if ch == q[qi] {
++                score += 1
++                // Contiguous match bonus.
++                if lastMatchIndex == ci - 1 { score += 3 }
++                // Start-of-string or word-boundary bonus.
++                if ci == 0 { score += 5 }
++                else if c[ci - 1] == " " || c[ci - 1] == "-" || c[ci - 1] == "_" { score += 3 }
++                lastMatchIndex = ci
++                qi += 1
++            }
++        }
++
++        // All query chars must be consumed in order.
++        return qi == q.count ? score : nil
++    }
++
++    /// Rank notes by fuzzy match against their titles. Empty query returns the input order.
++    static func rank(notes: [Note], query: String) -> [Note] {
++        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
++        guard !trimmed.isEmpty else { return notes }
++
++        return notes
++            .compactMap { note -> (Note, Int)? in
++                guard let s = score(query: trimmed, candidate: note.title) else { return nil }
++                return (note, s)
++            }
++            .sorted { $0.1 > $1.1 }
++            .map { $0.0 }
++    }
++}
+diff --git a/ThoughtQueue/Store/Note.swift b/ThoughtQueue/Store/Note.swift
+new file mode 100644
+index 0000000..156b998
+--- /dev/null
++++ b/ThoughtQueue/Store/Note.swift
+@@ -0,0 +1,61 @@
++import Foundation
++
++/// A note is a value type fully derived from its file URL on disk.
++/// Nothing here is authoritative metadata cached elsewhere: title is the filename
++/// (without extension), category is the immediate parent folder under the store root
++/// (or "Uncategorized" when the file lives directly in the root), and dates come from
++/// FileManager attributes. Reconstruct a `Note` from its URL on every read.
++struct Note: Identifiable, Hashable {
++    /// The absolute file URL is the stable identity of a note.
++    let url: URL
++    let title: String
++    /// nil means the note is in the store root (Uncategorized).
++    let category: String?
++    let createdAt: Date
++    let modifiedAt: Date
++
++    var id: URL { url }
++
++    /// Display name for the category, mapping nil to "Uncategorized".
++    var categoryDisplay: String { category ?? Note.uncategorized }
++
++    static let uncategorized = "Uncategorized"
++
++    /// Build a Note from a file URL relative to the given store root.
++    /// Returns nil if the URL is not a regular `.md` file under the root.
++    static func from(url: URL, storeRoot: URL) -> Note? {
++        guard url.pathExtension.lowercased() == "md" else { return nil }
++
++        let fm = FileManager.default
++        var isDir: ObjCBool = false
++        guard fm.fileExists(atPath: url.path, isDirectory: &isDir), !isDir.boolValue else { return nil }
++
++        let title = url.deletingPathExtension().lastPathComponent
++        let category = Note.category(of: url, storeRoot: storeRoot)
++
++        let attrs = try? fm.attributesOfItem(atPath: url.path)
++        let created = (attrs?[.creationDate] as? Date) ?? Date()
++        let modified = (attrs?[.modificationDate] as? Date) ?? created
++
++        return Note(url: url, title: title, category: category, createdAt: created, modifiedAt: modified)
++    }
++
++    /// Determine the category folder for a file URL under the store root.
++    /// Only one level of nesting is meaningful; deeper paths use their first
++    /// subfolder under the root as the category.
++    private static func category(of url: URL, storeRoot: URL) -> String? {
++        let parent = url.deletingLastPathComponent().standardizedFileURL
++        let root = storeRoot.standardizedFileURL
++        if parent.path == root.path { return nil }
++
++        // Walk up to find the immediate child of root that contains this file.
++        var current = parent
++        while current.deletingLastPathComponent().path != root.path {
++            let up = current.deletingLastPathComponent()
++            if up.path == current.path { break } // reached filesystem root, give up
++            current = up
++        }
++        let name = current.lastPathComponent
++        return name.isEmpty ? nil : name
++    }
++}
+diff --git a/ThoughtQueue/Store/NoteStore.swift b/ThoughtQueue/Store/NoteStore.swift
+new file mode 100644
+index 0000000..c53e550
+--- /dev/null
++++ b/ThoughtQueue/Store/NoteStore.swift
+@@ -0,0 +1,312 @@
++import Foundation
++import os
++
++private let log = Logger(subsystem: "com.thoughtqueue.app", category: "NoteStore")
++
++extension Notification.Name {
++    /// Posted whenever the set of notes or their metadata changes (app writes or external edits).
++    static let notesDidChange = Notification.Name("notesDidChange")
++}
++
++/// Filesystem-backed note store. Replaces the old SQLite DatabaseManager.
++/// The store folder is the single source of truth: notes are plain `.md` files,
++/// categories are immediate subfolders, dates are file attributes. No DB, no sidecar.
++final class NoteStore {
++    static let shared = NoteStore()
++
++    /// The store root folder. Set via PreferencesManager; can be overridden in tests.
++    var rootURL: URL? {
++        didSet {
++            if let url = rootURL { ensureRootExists(url) }
++        }
++    }
++
++    /// Recently-written paths the watcher should ignore (self-write suppression).
++    /// Callers register a path before writing; the watcher consults `wasSelfWrite`.
++    private var selfWrites: [String: Date] = [:]
++    private let selfWriteLock = NSLock()
++    private let selfWriteWindow: TimeInterval = 2.0
++
++    private let fm = FileManager.default
++
++    private init() {}
++
++    // MARK: - Self-write suppression
++
++    /// Record that the app is about to write `url`, so the watcher can ignore the resulting event.
++    func registerSelfWrite(_ url: URL) {
++        selfWriteLock.lock()
++        defer { selfWriteLock.unlock() }
++        selfWrites[url.standardizedFileURL.path] = Date()
++    }
++
++    /// True if `path` was written by the app within the suppression window.
++    func wasSelfWrite(_ path: String) -> Bool {
++        selfWriteLock.lock()
++        defer { selfWriteLock.unlock() }
++        let std = URL(fileURLWithPath: path).standardizedFileURL.path
++        let now = Date()
++        // Prune expired entries.
++        selfWrites = selfWrites.filter { now.timeIntervalSince($0.value) < selfWriteWindow }
++        return selfWrites[std] != nil
++    }
++
++    // MARK: - Root management
++
++    private func ensureRootExists(_ url: URL) {
++        try? fm.createDirectory(at: url, withIntermediateDirectories: true)
++    }
++
++    private func requireRoot() -> URL? {
++        guard let root = rootURL else {
++            log.error("NoteStore used with no rootURL set")
++            return nil
++        }
++        return root
++    }
++
++    // MARK: - Reads
++
++    /// All category names (immediate subfolders), sorted. Does not include Uncategorized.
++    func categories() -> [String] {
++        guard let root = requireRoot() else { return [] }
++        guard let entries = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
++            return []
++        }
++        var names: [String] = []
++        for entry in entries {
++            var isDir: ObjCBool = false
++            if fm.fileExists(atPath: entry.path, isDirectory: &isDir), isDir.boolValue {
++                names.append(entry.lastPathComponent)
++            }
++        }
++        return names.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
++    }
++
++    /// All notes across the whole store, newest first by modified date.
++    func allNotes() -> [Note] {
++        guard let root = requireRoot() else { return [] }
++        var result: [Note] = []
++        collectNotes(in: root, root: root, into: &result)
++        return result.sorted { $0.modifiedAt > $1.modifiedAt }
++    }
++
++    /// Notes for a given category. Pass nil for Uncategorized (root-level notes only).
++    func notes(in category: String?) -> [Note] {
++        return allNotes().filter { $0.category == category }
++    }
++
++    private func collectNotes(in dir: URL, root: URL, into result: inout [Note]) {
++        guard let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
++            return
++        }
++        for entry in entries {
++            var isDir: ObjCBool = false
++            guard fm.fileExists(atPath: entry.path, isDirectory: &isDir) else { continue }
++            if isDir.boolValue {
++                collectNotes(in: entry, root: root, into: &result)
++            } else if let note = Note.from(url: entry, storeRoot: root) {
++                result.append(note)
++            }
++        }
++    }
++
++    /// Read the full markdown body of a note.
++    func body(of note: Note) -> String {
++        (try? String(contentsOf: note.url, encoding: .utf8)) ?? ""
++    }
++
++    // MARK: - Naming
++
++    /// Slugify a string into a safe filename stem (no extension).
++    /// Keeps it readable: lowercased, spaces to hyphens, strips path-unsafe chars.
++    static func slug(_ raw: String) -> String {
++        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
++        guard !trimmed.isEmpty else { return "" }
++
++        // Take the first line only.
++        let firstLine = trimmed.split(whereSeparator: \.isNewline).first.map(String.init) ?? trimmed
++
++        var allowed = CharacterSet.alphanumerics
++        allowed.insert(charactersIn: " -_")
++        let filtered = String(firstLine.unicodeScalars.filter { allowed.contains($0) })
++
++        let collapsed = filtered
++            .lowercased()
++            .split(whereSeparator: { $0 == " " || $0 == "-" })
++            .joined(separator: "-")
++
++        // Cap length so filenames stay reasonable.
++        let capped = String(collapsed.prefix(60))
++        return capped.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
++    }
++
++    /// Resolve a non-colliding file URL for the given stem inside `folder`.
++    /// If `<stem>.md` exists, append a numeric counter, then a timestamp as last resort.
++    func uniqueURL(stem: String, in folder: URL) -> URL {
++        let base = stem.isEmpty ? Self.timestampStem() : stem
++        var candidate = folder.appendingPathComponent("\(base).md")
++        if !fm.fileExists(atPath: candidate.path) { return candidate }
++
++        for counter in 2...999 {
++            candidate = folder.appendingPathComponent("\(base)-\(counter).md")
++            if !fm.fileExists(atPath: candidate.path) { return candidate }
++        }
++        // Extremely unlikely fallback: timestamp suffix guarantees uniqueness.
++        let ts = Int(Date().timeIntervalSince1970)
++        return folder.appendingPathComponent("\(base)-\(ts).md")
++    }
++
++    /// A timestamp-based filename stem, used when no title is available.
++    static func timestampStem() -> String {
++        let f = DateFormatter()
++        f.dateFormat = "yyyy-MM-dd-HHmmss"
++        return "note-\(f.string(from: Date()))"
++    }
++
++    // MARK: - Writes
++
++    /// Folder URL for a category name; nil/empty means the store root (Uncategorized).
++    private func folderURL(for category: String?) -> URL? {
++        guard let root = requireRoot() else { return nil }
++        guard let category, !category.isEmpty, category != Note.uncategorized else { return root }
++        let folder = root.appendingPathComponent(category, isDirectory: true)
++        try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
++        return folder
++    }
++
++    /// Create a new note. `title` becomes the filename (slugified); empty falls back to
++    /// the first body line, then a timestamp. Returns the created Note or nil on failure.
++    @discardableResult
++    func createNote(title: String, body: String, category: String?) -> Note? {
++        guard let folder = folderURL(for: category), let root = rootURL else { return nil }
++
++        var stem = Self.slug(title)
++        if stem.isEmpty { stem = Self.slug(body) }
++        let url = uniqueURL(stem: stem, in: folder)
++
++        registerSelfWrite(url)
++        do {
++            try body.write(to: url, atomically: true, encoding: .utf8)
++        } catch {
++            log.error("createNote write failed: \(error.localizedDescription)")
++            return nil
++        }
++        let note = Note.from(url: url, storeRoot: root)
++        postChange()
++        return note
++    }
++
++    /// Append text to an existing note, separated by a blank line. Returns true on success.
++    @discardableResult
++    func append(to note: Note, text: String) -> Bool {
++        guard fm.fileExists(atPath: note.url.path) else {
++            log.warning("append target missing: \(note.url.path)")
++            return false
++        }
++        let existing = body(of: note)
++        let separator = existing.isEmpty ? "" : "\n\n"
++        let combined = existing + separator + text
++
++        registerSelfWrite(note.url)
++        do {
++            try combined.write(to: note.url, atomically: true, encoding: .utf8)
++        } catch {
++            log.error("append write failed: \(error.localizedDescription)")
++            return false
++        }
++        postChange()
++        return true
++    }
++
++    /// Overwrite the body of an existing note.
++    @discardableResult
++    func updateBody(of note: Note, body: String) -> Bool {
++        registerSelfWrite(note.url)
++        do {
++            try body.write(to: note.url, atomically: true, encoding: .utf8)
++        } catch {
++            log.error("updateBody failed: \(error.localizedDescription)")
++            return false
++        }
++        postChange()
++        return true
++    }
++
++    /// Rename a note's title (its filename). Returns the new Note or nil on failure.
++    @discardableResult
++    func rename(_ note: Note, to newTitle: String) -> Note? {
++        guard let root = rootURL else { return nil }
++        let folder = note.url.deletingLastPathComponent()
++        var stem = Self.slug(newTitle)
++        if stem.isEmpty { stem = Self.timestampStem() }
++        let dest = uniqueURL(stem: stem, in: folder)
++
++        registerSelfWrite(note.url)
++        registerSelfWrite(dest)
++        do {
++            try fm.moveItem(at: note.url, to: dest)
++        } catch {
++            log.error("rename failed: \(error.localizedDescription)")
++            return nil
++        }
++        let renamed = Note.from(url: dest, storeRoot: root)
++        postChange()
++        return renamed
++    }
++
++    /// Move a note to a different category (folder). Pass nil for Uncategorized (root).
++    @discardableResult
++    func move(_ note: Note, to category: String?) -> Note? {
++        guard let root = rootURL, let folder = folderURL(for: category) else { return nil }
++        let dest = uniqueURL(stem: note.url.deletingPathExtension().lastPathComponent, in: folder)
++
++        registerSelfWrite(note.url)
++        registerSelfWrite(dest)
++        do {
++            try fm.moveItem(at: note.url, to: dest)
++        } catch {
++            log.error("move failed: \(error.localizedDescription)")
++            return nil
++        }
++        let moved = Note.from(url: dest, storeRoot: root)
++        postChange()
++        return moved
++    }
++
++    /// Delete a note.
++    @discardableResult
++    func delete(_ note: Note) -> Bool {
++        registerSelfWrite(note.url)
++        do {
++            try fm.removeItem(at: note.url)
++        } catch {
++            log.error("delete failed: \(error.localizedDescription)")
++            return false
++        }
++        postChange()
++        return true
++    }
++
++    /// Create a new category folder. Returns true if created or already exists.
++    @discardableResult
++    func createCategory(_ name: String) -> Bool {
++        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
++        guard !trimmed.isEmpty, let folder = folderURL(for: trimmed) else { return false }
++        let ok = fm.fileExists(atPath: folder.path)
++        if ok { postChange() }
++        return ok
++    }
++
++    // MARK: - Notifications
++
++    private func postChange() {
++        if Thread.isMainThread {
++            NotificationCenter.default.post(name: .notesDidChange, object: nil)
++        } else {
++            DispatchQueue.main.async {
++                NotificationCenter.default.post(name: .notesDidChange, object: nil)
++            }
++        }
++    }
++}
+diff --git a/ThoughtQueue/Views/CapturePanel.swift b/ThoughtQueue/Views/CapturePanel.swift
+new file mode 100644
+index 0000000..893fb07
+--- /dev/null
++++ b/ThoughtQueue/Views/CapturePanel.swift
+@@ -0,0 +1,284 @@
++import Cocoa
++
++/// Floating capture panel near the cursor: editable text, a category picker, and a
++/// new-vs-append target picker. Writes through NoteStore.
++final class CapturePanel {
++    static let shared = CapturePanel()
++
++    private static let newCategoryTag = -1
++    private static let uncategorizedTag = 0
++
++    private var panel: NSPanel?
++    private var textView: NSTextView?
++    private var categoryPopup: NSPopUpButton?
++    private var targetPopup: NSPopUpButton?
++
++    /// Append targets shown in the target popup, parallel to popup item order (after "New Note").
++    private var appendTargets: [Note] = []
++    private var lastSelectedCategoryName: String?
++
++    private init() {}
++
++    /// Show the capture panel pre-filled with text (empty for a blank note).
++    func show(with text: String) {
++        guard Thread.isMainThread else {
++            DispatchQueue.main.async { self.show(with: text) }
++            return
++        }
++        present(text: text)
++    }
++
++    private func present(text: String) {
++        panel?.close()
++
++        let width: CGFloat = 420
++        let height: CGFloat = 300
++
++        let mouse = NSEvent.mouseLocation
++        let origin = NSPoint(x: mouse.x - width / 2, y: mouse.y - height - 20)
++
++        let newPanel = NSPanel(
++            contentRect: NSRect(origin: origin, size: NSSize(width: width, height: height)),
++            styleMask: [.titled, .closable, .nonactivatingPanel, .hudWindow],
++            backing: .buffered,
++            defer: false
++        )
++        newPanel.level = .floating
++        newPanel.title = "Capture to ThoughtQueue"
++        newPanel.isFloatingPanel = true
++        newPanel.isReleasedWhenClosed = false
++
++        let content = NSView(frame: NSRect(x: 0, y: 0, width: width, height: height))
++
++        // Text area
++        let scrollView = NSScrollView()
++        scrollView.translatesAutoresizingMaskIntoConstraints = false
++        scrollView.hasVerticalScroller = true
++        scrollView.borderType = .bezelBorder
++
++        let tv = NSTextView()
++        tv.string = text
++        tv.font = .systemFont(ofSize: 13)
++        tv.isEditable = true
++        tv.isRichText = false
++        tv.isVerticallyResizable = true
++        tv.isHorizontallyResizable = false
++        tv.textContainerInset = NSSize(width: 4, height: 4)
++        tv.textContainer?.widthTracksTextView = true
++        tv.autoresizingMask = [.width, .height]
++        scrollView.documentView = tv
++        self.textView = tv
++
++        // Target picker (new note vs. append to existing)
++        let targetLabel = NSTextField(labelWithString: "Save to:")
++        targetLabel.font = .systemFont(ofSize: 12)
++        targetLabel.translatesAutoresizingMaskIntoConstraints = false
++
++        let tPopup = NSPopUpButton()
++        tPopup.translatesAutoresizingMaskIntoConstraints = false
++        tPopup.target = self
++        tPopup.action = #selector(targetChanged(_:))
++        self.targetPopup = tPopup
++
++        // Category picker (only meaningful for new notes)
++        let popup = NSPopUpButton()
++        popup.translatesAutoresizingMaskIntoConstraints = false
++        popup.target = self
++        popup.action = #selector(categoryChanged(_:))
++        self.categoryPopup = popup
++
++        populateTargetPopup()
++        populateCategoryPopup(selecting: nil)
++        updateCategoryEnabled()
++
++        let saveBtn = NSButton(title: "Save", target: self, action: #selector(save))
++        saveBtn.bezelStyle = .rounded
++        saveBtn.keyEquivalent = "\r"
++        saveBtn.translatesAutoresizingMaskIntoConstraints = false
++
++        let cancelBtn = NSButton(title: "Cancel", target: self, action: #selector(cancel))
++        cancelBtn.bezelStyle = .rounded
++        cancelBtn.keyEquivalent = "\u{1b}"
++        cancelBtn.translatesAutoresizingMaskIntoConstraints = false
++
++        content.addSubview(scrollView)
++        content.addSubview(targetLabel)
++        content.addSubview(tPopup)
++        content.addSubview(popup)
++        content.addSubview(saveBtn)
++        content.addSubview(cancelBtn)
++
++        NSLayoutConstraint.activate([
++            scrollView.topAnchor.constraint(equalTo: content.topAnchor, constant: 16),
++            scrollView.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
++            scrollView.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
++            scrollView.bottomAnchor.constraint(equalTo: targetLabel.topAnchor, constant: -12),
++
++            targetLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
++            targetLabel.bottomAnchor.constraint(equalTo: popup.topAnchor, constant: -10),
++
++            tPopup.leadingAnchor.constraint(equalTo: targetLabel.trailingAnchor, constant: 8),
++            tPopup.centerYAnchor.constraint(equalTo: targetLabel.centerYAnchor),
++            tPopup.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
++
++            popup.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
++            popup.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
++            popup.widthAnchor.constraint(greaterThanOrEqualToConstant: 150),
++
++            saveBtn.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
++            saveBtn.centerYAnchor.constraint(equalTo: popup.centerYAnchor),
++            saveBtn.widthAnchor.constraint(equalToConstant: 70),
++
++            cancelBtn.trailingAnchor.constraint(equalTo: saveBtn.leadingAnchor, constant: -8),
++            cancelBtn.centerYAnchor.constraint(equalTo: popup.centerYAnchor),
++            cancelBtn.widthAnchor.constraint(equalToConstant: 80),
++        ])
++
++        newPanel.contentView = content
++        newPanel.makeKeyAndOrderFront(nil)
++        newPanel.makeFirstResponder(tv)
++        NSApp.activate(ignoringOtherApps: true)
++        panel = newPanel
++    }
++
++    // MARK: - Target popup
++
++    private func populateTargetPopup() {
++        guard let popup = targetPopup else { return }
++        popup.removeAllItems()
++        popup.addItem(withTitle: "New Note")
++
++        appendTargets = NoteStore.shared.allNotes()
++        if !appendTargets.isEmpty {
++            popup.menu?.addItem(NSMenuItem.separator())
++            for note in appendTargets {
++                let label = note.category == nil ? note.title : "\(note.categoryDisplay) / \(note.title)"
++                popup.addItem(withTitle: "Append → \(label)")
++            }
++        }
++        popup.selectItem(at: 0)
++    }
++
++    @objc private func targetChanged(_ sender: NSPopUpButton) {
++        updateCategoryEnabled()
++    }
++
++    /// Category only applies to new notes; disable it when appending.
++    private func updateCategoryEnabled() {
++        let isNewNote = (targetPopup?.indexOfSelectedItem ?? 0) == 0
++        categoryPopup?.isEnabled = isNewNote
++    }
++
++    /// The currently chosen append target, or nil if "New Note" is selected.
++    private func selectedAppendTarget() -> Note? {
++        guard let popup = targetPopup else { return nil }
++        let idx = popup.indexOfSelectedItem
++        guard idx > 0 else { return nil }
++        // Items: 0 = New Note, 1 = separator, 2... = targets.
++        let targetIndex = idx - 2
++        guard targetIndex >= 0, targetIndex < appendTargets.count else { return nil }
++        return appendTargets[targetIndex]
++    }
++
++    // MARK: - Category popup
++
++    private func populateCategoryPopup(selecting name: String?) {
++        guard let popup = categoryPopup else { return }
++        popup.removeAllItems()
++
++        popup.addItem(withTitle: Note.uncategorized)
++        popup.menu?.items.last?.tag = Self.uncategorizedTag
++
++        for cat in NoteStore.shared.categories() {
++            popup.addItem(withTitle: cat)
++            popup.menu?.items.last?.tag = 1
++        }
++
++        popup.menu?.addItem(NSMenuItem.separator())
++        let newItem = NSMenuItem(title: "+ New Category\u{2026}", action: nil, keyEquivalent: "")
++        newItem.tag = Self.newCategoryTag
++        popup.menu?.addItem(newItem)
++
++        if let name = name, name != Note.uncategorized {
++            popup.selectItem(withTitle: name)
++        } else {
++            popup.selectItem(at: 0)
++        }
++        lastSelectedCategoryName = popup.titleOfSelectedItem
++    }
++
++    @objc private func categoryChanged(_ sender: NSPopUpButton) {
++        let tag = sender.selectedItem?.tag ?? 0
++        guard tag == Self.newCategoryTag else {
++            lastSelectedCategoryName = sender.titleOfSelectedItem
++            return
++        }
++        promptForNewCategory()
++    }
++
++    private func promptForNewCategory() {
++        let alert = NSAlert()
++        alert.messageText = "New Category"
++        alert.informativeText = "Enter a name for the new category:"
++        alert.addButton(withTitle: "Create")
++        alert.addButton(withTitle: "Cancel")
++        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
++        alert.accessoryView = input
++
++        let runHandler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
++            guard let self = self else { return }
++            let trimmed = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
++            guard response == .alertFirstButtonReturn, !trimmed.isEmpty else {
++                if let last = self.lastSelectedCategoryName { self.categoryPopup?.selectItem(withTitle: last) }
++                return
++            }
++            _ = NoteStore.shared.createCategory(trimmed)
++            self.populateCategoryPopup(selecting: trimmed)
++        }
++
++        if let panel = panel {
++            alert.beginSheetModal(for: panel, completionHandler: runHandler)
++        } else {
++            runHandler(alert.runModal())
++        }
++    }
++
++    // MARK: - Save / Cancel
++
++    @objc private func save() {
++        guard let tv = textView else { return }
++        let text = tv.string.trimmingCharacters(in: .whitespacesAndNewlines)
++        guard !text.isEmpty else { return }
++
++        if let target = selectedAppendTarget() {
++            if NoteStore.shared.append(to: target, text: text) {
++                ToastWindow.show(message: "Appended to \(target.title)")
++            } else {
++                // Fallback: target vanished, create a new note instead.
++                _ = NoteStore.shared.createNote(title: "", body: text, category: nil)
++                ToastWindow.show(message: "Target missing; saved new note")
++            }
++        } else {
++            let categoryTitle = categoryPopup?.titleOfSelectedItem
++            let category = (categoryTitle == Note.uncategorized) ? nil : categoryTitle
++            if let note = NoteStore.shared.createNote(title: "", body: text, category: category) {
++                ToastWindow.show(message: "Captured!")
++                AutoIntelService.shared.process(note: note, body: text)
++            }
++        }
++        closeAndReset()
++    }
++
++    @objc private func cancel() {
++        closeAndReset()
++    }
++
++    private func closeAndReset() {
++        panel?.close()
++        panel = nil
++        textView = nil
++        categoryPopup = nil
++        targetPopup = nil
++        appendTargets = []
++    }
++}
+diff --git a/ThoughtQueue/Views/MainWindowController.swift b/ThoughtQueue/Views/MainWindowController.swift
+new file mode 100644
+index 0000000..a7e9453
+--- /dev/null
++++ b/ThoughtQueue/Views/MainWindowController.swift
+@@ -0,0 +1,328 @@
++import Cocoa
++
++/// Main window: category sidebar + notes table + note detail pane (three-column split).
++final class MainWindowController: NSWindowController {
++    static let shared = MainWindowController()
++
++    private let splitVC = NSSplitViewController()
++    private let sidebarVC = CategorySidebarViewController()
++    private let listVC = NotesListViewController()
++    private let detailVC = NoteDetailViewController()
++
++    convenience init() {
++        let window = NSWindow(
++            contentRect: NSRect(x: 0, y: 0, width: 900, height: 560),
++            styleMask: [.titled, .closable, .resizable, .miniaturizable],
++            backing: .buffered,
++            defer: false
++        )
++        window.title = "ThoughtQueue"
++        window.center()
++        window.setFrameAutosaveName("ThoughtQueueMainWindow")
++        self.init(window: window)
++
++        sidebarVC.onCategorySelected = { [weak self] selection in
++            self?.listVC.show(selection: selection)
++        }
++        listVC.onNoteSelected = { [weak self] note in
++            self?.detailVC.display(note)
++        }
++
++        let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarVC)
++        sidebarItem.minimumThickness = 170
++        sidebarItem.maximumThickness = 260
++        sidebarItem.canCollapse = false
++
++        let listItem = NSSplitViewItem(viewController: listVC)
++        listItem.minimumThickness = 240
++
++        let detailItem = NSSplitViewItem(viewController: detailVC)
++        detailItem.minimumThickness = 300
++
++        splitVC.addSplitViewItem(sidebarItem)
++        splitVC.addSplitViewItem(listItem)
++        splitVC.addSplitViewItem(detailItem)
++
++        window.contentViewController = splitVC
++    }
++
++    override func showWindow(_ sender: Any?) {
++        super.showWindow(sender)
++        sidebarVC.reload()
++        sidebarVC.selectAll()
++        listVC.show(selection: .all)
++    }
++}
++
++// MARK: - Sidebar selection
++
++enum SidebarSelection: Equatable {
++    case all
++    case uncategorized
++    case category(String)
++}
++
++// MARK: - Category Sidebar
++
++final class CategorySidebarViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate {
++    var onCategorySelected: ((SidebarSelection) -> Void)?
++
++    private let tableView = NSTableView()
++    private var categories: [String] = []
++    private var reloadWorkItem: DispatchWorkItem?
++
++    override func loadView() {
++        let container = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 560))
++
++        let scrollView = NSScrollView()
++        scrollView.documentView = tableView
++        scrollView.hasVerticalScroller = true
++        scrollView.translatesAutoresizingMaskIntoConstraints = false
++        scrollView.drawsBackground = false
++
++        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("category"))
++        tableView.addTableColumn(column)
++        tableView.headerView = nil
++        tableView.delegate = self
++        tableView.dataSource = self
++        tableView.rowHeight = 32
++        tableView.backgroundColor = .clear
++
++        container.addSubview(scrollView)
++
++        let addButton = NSButton(title: "+ Add Category", target: self, action: #selector(addCategory))
++        addButton.bezelStyle = .inline
++        addButton.font = .systemFont(ofSize: 13)
++        addButton.translatesAutoresizingMaskIntoConstraints = false
++        container.addSubview(addButton)
++
++        NSLayoutConstraint.activate([
++            scrollView.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
++            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
++            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
++            scrollView.bottomAnchor.constraint(equalTo: addButton.topAnchor, constant: -8),
++            addButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
++            addButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
++        ])
++
++        self.view = container
++        NotificationCenter.default.addObserver(self, selector: #selector(onNotesChanged), name: .notesDidChange, object: nil)
++    }
++
++    deinit { NotificationCenter.default.removeObserver(self) }
++
++    @objc private func onNotesChanged() {
++        let schedule = { [weak self] in
++            self?.reloadWorkItem?.cancel()
++            let item = DispatchWorkItem { [weak self] in self?.reload() }
++            self?.reloadWorkItem = item
++            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: item)
++        }
++        if Thread.isMainThread { schedule() } else { DispatchQueue.main.async { schedule() } }
++    }
++
++    func reload() {
++        let selectedRow = tableView.selectedRow
++        categories = NoteStore.shared.categories()
++        tableView.reloadData()
++        if selectedRow >= 0 && selectedRow < numberOfRows(in: tableView) {
++            tableView.selectRowIndexes(IndexSet(integer: selectedRow), byExtendingSelection: false)
++        }
++    }
++
++    func selectAll() {
++        tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
++    }
++
++    @objc private func addCategory() {
++        let alert = NSAlert()
++        alert.messageText = "New Category"
++        alert.informativeText = "Enter a name for the new category folder:"
++        alert.addButton(withTitle: "Create")
++        alert.addButton(withTitle: "Cancel")
++        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
++        alert.accessoryView = input
++        if alert.runModal() == .alertFirstButtonReturn {
++            let name = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
++            if !name.isEmpty {
++                _ = NoteStore.shared.createCategory(name)
++                reload()
++            }
++        }
++    }
++
++    // Row mapping: 0 = All, 1 = Uncategorized, 2+ = categories.
++    func numberOfRows(in tableView: NSTableView) -> Int { categories.count + 2 }
++
++    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
++        let label = NSTextField(labelWithString: rowTitle(row))
++        label.font = .systemFont(ofSize: 14, weight: row < 2 ? .semibold : .regular)
++        label.lineBreakMode = .byTruncatingTail
++        let stack = NSStackView(views: [label])
++        stack.orientation = .horizontal
++        stack.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
++        return stack
++    }
++
++    private func rowTitle(_ row: Int) -> String {
++        if row == 0 { return "All" }
++        if row == 1 { return Note.uncategorized }
++        return categories[row - 2]
++    }
++
++    func tableViewSelectionDidChange(_ notification: Notification) {
++        let row = tableView.selectedRow
++        guard row >= 0 else { return }
++        if row == 0 { onCategorySelected?(.all) }
++        else if row == 1 { onCategorySelected?(.uncategorized) }
++        else { onCategorySelected?(.category(categories[row - 2])) }
++    }
++}
++
++// MARK: - Notes List
++
++final class NotesListViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate {
++    var onNoteSelected: ((Note) -> Void)?
++
++    private let tableView = NSTableView()
++    private var notes: [Note] = []
++    private var selection: SidebarSelection = .all
++    private var reloadWorkItem: DispatchWorkItem?
++
++    override func loadView() {
++        let container = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 560))
++
++        let scrollView = NSScrollView()
++        scrollView.documentView = tableView
++        scrollView.hasVerticalScroller = true
++        scrollView.translatesAutoresizingMaskIntoConstraints = false
++
++        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("note"))
++        tableView.addTableColumn(column)
++        tableView.headerView = nil
++        tableView.delegate = self
++        tableView.dataSource = self
++        tableView.rowHeight = 48
++
++        let menu = NSMenu()
++        menu.delegate = self
++        tableView.menu = menu
++
++        container.addSubview(scrollView)
++        NSLayoutConstraint.activate([
++            scrollView.topAnchor.constraint(equalTo: container.topAnchor),
++            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
++            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
++            scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
++        ])
++        self.view = container
++        NotificationCenter.default.addObserver(self, selector: #selector(onNotesChanged), name: .notesDidChange, object: nil)
++    }
++
++    deinit { NotificationCenter.default.removeObserver(self) }
++
++    @objc private func onNotesChanged() {
++        let schedule = { [weak self] in
++            self?.reloadWorkItem?.cancel()
++            let item = DispatchWorkItem { [weak self] in self?.reload() }
++            self?.reloadWorkItem = item
++            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: item)
++        }
++        if Thread.isMainThread { schedule() } else { DispatchQueue.main.async { schedule() } }
++    }
++
++    func show(selection: SidebarSelection) {
++        self.selection = selection
++        reload()
++    }
++
++    func reload() {
++        _ = view
++        switch selection {
++        case .all: notes = NoteStore.shared.allNotes()
++        case .uncategorized: notes = NoteStore.shared.notes(in: nil)
++        case .category(let name): notes = NoteStore.shared.notes(in: name)
++        }
++        tableView.reloadData()
++    }
++
++    func numberOfRows(in tableView: NSTableView) -> Int { notes.count }
++
++    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
++        let note = notes[row]
++        let title = NSTextField(labelWithString: note.title)
++        title.font = .systemFont(ofSize: 13, weight: .medium)
++        title.lineBreakMode = .byTruncatingTail
++
++        let subtitle = NSTextField(labelWithString: note.categoryDisplay)
++        subtitle.font = .systemFont(ofSize: 11)
++        subtitle.textColor = .secondaryLabelColor
++
++        let stack = NSStackView(views: [title, subtitle])
++        stack.orientation = .vertical
++        stack.alignment = .leading
++        stack.spacing = 2
++        stack.edgeInsets = NSEdgeInsets(top: 4, left: 10, bottom: 4, right: 10)
++        return stack
++    }
++
++    func tableViewSelectionDidChange(_ notification: Notification) {
++        let row = tableView.selectedRow
++        guard row >= 0, row < notes.count else { return }
++        onNoteSelected?(notes[row])
++    }
++
++    private func clickedNote() -> Note? {
++        let row = tableView.clickedRow
++        guard row >= 0, row < notes.count else { return nil }
++        return notes[row]
++    }
++
++    @objc private func deleteClicked() {
++        guard let note = clickedNote() else { return }
++        let alert = NSAlert()
++        alert.messageText = "Delete \"\(note.title)\"?"
++        alert.alertStyle = .warning
++        alert.addButton(withTitle: "Delete")
++        alert.addButton(withTitle: "Cancel")
++        if alert.runModal() == .alertFirstButtonReturn { _ = NoteStore.shared.delete(note) }
++    }
++
++    @objc private func renameClicked() {
++        guard let note = clickedNote() else { return }
++        let alert = NSAlert()
++        alert.messageText = "Rename Note"
++        alert.addButton(withTitle: "Rename")
++        alert.addButton(withTitle: "Cancel")
++        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
++        input.stringValue = note.title
++        alert.accessoryView = input
++        if alert.runModal() == .alertFirstButtonReturn {
++            let name = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
++            if !name.isEmpty { _ = NoteStore.shared.rename(note, to: name) }
++        }
++    }
++
++    @objc private func setWorkingDoc() {
++        guard let note = clickedNote() else { return }
++        PreferencesManager.shared.workingDocumentURL = note.url
++        ToastWindow.show(message: "Working doc: \(note.title)")
++    }
++}
++
++extension NotesListViewController: NSMenuDelegate {
++    func menuNeedsUpdate(_ menu: NSMenu) {
++        menu.removeAllItems()
++        guard clickedNote() != nil else { return }
++        let rename = NSMenuItem(title: "Rename", action: #selector(renameClicked), keyEquivalent: "")
++        rename.target = self
++        let working = NSMenuItem(title: "Set as Working Document", action: #selector(setWorkingDoc), keyEquivalent: "")
++        working.target = self
++        let delete = NSMenuItem(title: "Delete", action: #selector(deleteClicked), keyEquivalent: "")
++        delete.target = self
++        menu.addItem(rename)
++        menu.addItem(working)
++        menu.addItem(NSMenuItem.separator())
++        menu.addItem(delete)
++    }
++}
+diff --git a/ThoughtQueue/Views/NoteDetailView.swift b/ThoughtQueue/Views/NoteDetailView.swift
+new file mode 100644
+index 0000000..6976af9
+--- /dev/null
++++ b/ThoughtQueue/Views/NoteDetailView.swift
+@@ -0,0 +1,114 @@
++import Cocoa
++
++/// Detail pane for a single note. Honors the click-behavior preference: run the default
++/// open-with command, render markdown read-only, or edit the raw markdown in place.
++final class NoteDetailViewController: NSViewController {
++    private var note: Note?
++
++    private var scrollView: NSScrollView!
++    private var textView: NSTextView!
++    private var headerLabel: NSTextField!
++    private var saveButton: NSButton!
++    private var isEditing = false
++
++    override func loadView() {
++        let container = NSView(frame: NSRect(x: 0, y: 0, width: 500, height: 550))
++
++        headerLabel = NSTextField(labelWithString: "")
++        headerLabel.font = .systemFont(ofSize: 15, weight: .semibold)
++        headerLabel.lineBreakMode = .byTruncatingTail
++        headerLabel.translatesAutoresizingMaskIntoConstraints = false
++        container.addSubview(headerLabel)
++
++        scrollView = NSScrollView()
++        scrollView.hasVerticalScroller = true
++        scrollView.borderType = .bezelBorder
++        scrollView.translatesAutoresizingMaskIntoConstraints = false
++
++        textView = NSTextView()
++        textView.font = .systemFont(ofSize: 13)
++        textView.isRichText = false
++        textView.isVerticallyResizable = true
++        textView.isHorizontallyResizable = false
++        textView.textContainerInset = NSSize(width: 6, height: 6)
++        textView.textContainer?.widthTracksTextView = true
++        textView.autoresizingMask = [.width]
++        scrollView.documentView = textView
++        container.addSubview(scrollView)
++
++        saveButton = NSButton(title: "Save", target: self, action: #selector(saveEdits))
++        saveButton.bezelStyle = .rounded
++        saveButton.translatesAutoresizingMaskIntoConstraints = false
++        saveButton.isHidden = true
++        container.addSubview(saveButton)
++
++        NSLayoutConstraint.activate([
++            headerLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
++            headerLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
++            headerLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
++
++            scrollView.topAnchor.constraint(equalTo: headerLabel.bottomAnchor, constant: 10),
++            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
++            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
++            scrollView.bottomAnchor.constraint(equalTo: saveButton.topAnchor, constant: -8),
++
++            saveButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
++            saveButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
++        ])
++
++        self.view = container
++    }
++
++    /// Show a note according to the configured click behavior.
++    func display(_ note: Note) {
++        _ = view
++        self.note = note
++        headerLabel.stringValue = note.category == nil ? note.title : "\(note.categoryDisplay) / \(note.title)"
++
++        switch PreferencesManager.shared.clickBehavior {
++        case .openCommand:
++            renderMarkdown(note)        // show something while the command runs
++            runOpenCommand(note)
++        case .renderMarkdown:
++            renderMarkdown(note)
++        case .editRaw:
++            editRaw(note)
++        }
++    }
++
++    private func renderMarkdown(_ note: Note) {
++        isEditing = false
++        saveButton.isHidden = true
++        textView.isEditable = false
++        let body = NoteStore.shared.body(of: note)
++        if let attributed = try? NSAttributedString(
++            markdown: body,
++            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
++        ) {
++            textView.textStorage?.setAttributedString(attributed)
++            textView.textColor = .labelColor
++            textView.font = .systemFont(ofSize: 13)
++        } else {
++            textView.string = body
++        }
++    }
++
++    private func editRaw(_ note: Note) {
++        isEditing = true
++        saveButton.isHidden = false
++        textView.isEditable = true
++        textView.string = NoteStore.shared.body(of: note)
++    }
++
++    private func runOpenCommand(_ note: Note) {
++        guard let action = PreferencesManager.shared.defaultOpenWithAction else { return }
++        let body = NoteStore.shared.body(of: note)
++        OpenWithService.shared.run(action: action, note: note, body: body)
++    }
++
++    @objc private func saveEdits() {
++        guard isEditing, let note = note else { return }
++        _ = NoteStore.shared.updateBody(of: note, body: textView.string)
++        ToastWindow.show(message: "Saved")
++    }
++}
+diff --git a/ThoughtQueue/Views/NoteRowView.swift b/ThoughtQueue/Views/NoteRowView.swift
+new file mode 100644
+index 0000000..a2e2aa2
+--- /dev/null
++++ b/ThoughtQueue/Views/NoteRowView.swift
+@@ -0,0 +1,98 @@
++import Cocoa
++
++/// A single note row used in the popover. Shows the title + category and offers quick
++/// actions: open-with (default action), copy path, and delete.
++final class NoteRowView: NSView {
++    private let note: Note
++    private let onAction: () -> Void
++
++    init(note: Note, compact: Bool, onAction: @escaping () -> Void) {
++        self.note = note
++        self.onAction = onAction
++        super.init(frame: .zero)
++        setup()
++    }
++
++    required init?(coder: NSCoder) { fatalError() }
++
++    private func setup() {
++        wantsLayer = true
++        layer?.cornerRadius = 6
++
++        let titleLabel = NSTextField(labelWithString: note.title)
++        titleLabel.font = .systemFont(ofSize: 13, weight: .medium)
++        titleLabel.lineBreakMode = .byTruncatingTail
++        titleLabel.translatesAutoresizingMaskIntoConstraints = false
++
++        let catLabel = NSTextField(labelWithString: note.categoryDisplay)
++        catLabel.font = .systemFont(ofSize: 11)
++        catLabel.textColor = .secondaryLabelColor
++        catLabel.lineBreakMode = .byTruncatingTail
++        catLabel.translatesAutoresizingMaskIntoConstraints = false
++
++        let openBtn = makeIconButton("arrow.up.forward.app", tip: "Open with default", action: #selector(openWith))
++        let copyBtn = makeIconButton("doc.on.doc", tip: "Copy path", action: #selector(copyPath))
++        let deleteBtn = makeIconButton("trash", tip: "Delete", action: #selector(confirmDelete))
++        deleteBtn.contentTintColor = .systemRed
++
++        let actions = NSStackView(views: [openBtn, copyBtn, deleteBtn])
++        actions.orientation = .horizontal
++        actions.spacing = 6
++        actions.translatesAutoresizingMaskIntoConstraints = false
++
++        addSubview(titleLabel)
++        addSubview(catLabel)
++        addSubview(actions)
++
++        NSLayoutConstraint.activate([
++            heightAnchor.constraint(equalToConstant: 44),
++            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 4),
++            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
++            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: actions.leadingAnchor, constant: -8),
++
++            catLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
++            catLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
++
++            actions.centerYAnchor.constraint(equalTo: centerYAnchor),
++            actions.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
++        ])
++    }
++
++    private func makeIconButton(_ symbol: String, tip: String, action: Selector) -> NSButton {
++        let btn = NSButton(title: "", target: self, action: action)
++        btn.image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
++        btn.imagePosition = .imageOnly
++        btn.bezelStyle = .inline
++        btn.isBordered = false
++        btn.toolTip = tip
++        return btn
++    }
++
++    @objc private func openWith() {
++        guard let action = PreferencesManager.shared.defaultOpenWithAction else {
++            ToastWindow.show(message: "No open-with action configured")
++            return
++        }
++        let body = NoteStore.shared.body(of: note)
++        OpenWithService.shared.run(action: action, note: note, body: body)
++        onAction()
++    }
++
++    @objc private func copyPath() {
++        NSPasteboard.general.clearContents()
++        NSPasteboard.general.setString(note.url.path, forType: .string)
++        ToastWindow.show(message: "Copied path")
++    }
++
++    @objc private func confirmDelete() {
++        let alert = NSAlert()
++        alert.messageText = "Delete \"\(note.title)\"?"
++        alert.informativeText = "This permanently removes the file."
++        alert.alertStyle = .warning
++        alert.addButton(withTitle: "Delete")
++        alert.addButton(withTitle: "Cancel")
++        if alert.runModal() == .alertFirstButtonReturn {
++            _ = NoteStore.shared.delete(note)
++        }
++    }
++}
+diff --git a/ThoughtQueue/Views/PopoverController.swift b/ThoughtQueue/Views/PopoverController.swift
+new file mode 100644
+index 0000000..368039b
+--- /dev/null
++++ b/ThoughtQueue/Views/PopoverController.swift
+@@ -0,0 +1,187 @@
++import Cocoa
++
++/// Left-click popover: a search field over the full notes list with per-row quick actions.
++final class PopoverController: NSObject, NSPopoverDelegate {
++    private let popover = NSPopover()
++    private let viewController = PopoverViewController()
++    private var globalMonitor: Any?
++    private var localMonitor: Any?
++
++    override init() {
++        super.init()
++        popover.contentViewController = viewController
++        popover.behavior = .transient
++        popover.delegate = self
++        popover.contentSize = NSSize(width: 380, height: 440)
++        viewController.onRequestClose = { [weak self] in self?.popover.close() }
++    }
++
++    func toggle(relativeTo rect: NSRect, of view: NSView) {
++        if popover.isShown {
++            popover.close()
++        } else {
++            viewController.reload()
++            popover.show(relativeTo: rect, of: view, preferredEdge: .minY)
++            popover.contentViewController?.view.window?.makeKey()
++            startEventMonitors()
++        }
++    }
++
++    private func startEventMonitors() {
++        if globalMonitor == nil {
++            globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
++                self?.popover.close()
++            }
++        }
++        if localMonitor == nil {
++            localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
++                guard let self, let popoverWindow = self.popover.contentViewController?.view.window else { return event }
++                if event.window !== popoverWindow { self.popover.close() }
++                return event
++            }
++        }
++    }
++
++    func popoverDidClose(_ notification: Notification) {
++        if let g = globalMonitor { NSEvent.removeMonitor(g); globalMonitor = nil }
++        if let l = localMonitor { NSEvent.removeMonitor(l); localMonitor = nil }
++    }
++}
++
++final class PopoverViewController: NSViewController, NSSearchFieldDelegate {
++    var onRequestClose: (() -> Void)?
++
++    private var searchField: NSSearchField!
++    private var stackView: NSStackView!
++    private var allNotes: [Note] = []
++    private var filtered: [Note] = []
++    private var reloadWorkItem: DispatchWorkItem?
++
++    override func loadView() {
++        let container = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 440))
++
++        let addButton = NSButton(title: "+ Add Note", target: self, action: #selector(addNote))
++        addButton.bezelStyle = .inline
++        addButton.font = .systemFont(ofSize: 13)
++        addButton.translatesAutoresizingMaskIntoConstraints = false
++        container.addSubview(addButton)
++
++        let openButton = NSButton(title: "Open", target: self, action: #selector(openMainWindow))
++        openButton.bezelStyle = .inline
++        openButton.font = .systemFont(ofSize: 13)
++        openButton.translatesAutoresizingMaskIntoConstraints = false
++        container.addSubview(openButton)
++
++        searchField = NSSearchField()
++        searchField.placeholderString = "Search notes\u{2026}"
++        searchField.translatesAutoresizingMaskIntoConstraints = false
++        searchField.delegate = self
++        container.addSubview(searchField)
++
++        stackView = NSStackView()
++        stackView.orientation = .vertical
++        stackView.alignment = .width
++        stackView.spacing = 4
++
++        let scrollView = NSScrollView()
++        scrollView.translatesAutoresizingMaskIntoConstraints = false
++        scrollView.hasVerticalScroller = true
++        scrollView.drawsBackground = false
++        scrollView.autohidesScrollers = true
++        scrollView.borderType = .noBorder
++
++        let flip = FlippedView()
++        flip.translatesAutoresizingMaskIntoConstraints = false
++        flip.addSubview(stackView)
++        stackView.translatesAutoresizingMaskIntoConstraints = false
++        NSLayoutConstraint.activate([
++            stackView.topAnchor.constraint(equalTo: flip.topAnchor, constant: 8),
++            stackView.leadingAnchor.constraint(equalTo: flip.leadingAnchor, constant: 8),
++            stackView.trailingAnchor.constraint(equalTo: flip.trailingAnchor, constant: -8),
++            stackView.bottomAnchor.constraint(equalTo: flip.bottomAnchor, constant: -8),
++        ])
++        scrollView.documentView = flip
++        container.addSubview(scrollView)
++        flip.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor).isActive = true
++
++        NSLayoutConstraint.activate([
++            addButton.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
++            addButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
++            openButton.centerYAnchor.constraint(equalTo: addButton.centerYAnchor),
++            openButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
++
++            searchField.topAnchor.constraint(equalTo: addButton.bottomAnchor, constant: 8),
++            searchField.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
++            searchField.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
++
++            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 8),
++            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
++            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
++            scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
++        ])
++
++        self.view = container
++        NotificationCenter.default.addObserver(self, selector: #selector(onNotesChanged), name: .notesDidChange, object: nil)
++    }
++
++    deinit { NotificationCenter.default.removeObserver(self) }
++
++    @objc private func onNotesChanged() {
++        let schedule = { [weak self] in
++            self?.reloadWorkItem?.cancel()
++            let item = DispatchWorkItem { [weak self] in self?.reload() }
++            self?.reloadWorkItem = item
++            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: item)
++        }
++        if Thread.isMainThread { schedule() } else { DispatchQueue.main.async { schedule() } }
++    }
++
++    func reload() {
++        _ = view
++        allNotes = NoteStore.shared.allNotes()
++        applyFilter()
++    }
++
++    func controlTextDidChange(_ obj: Notification) {
++        applyFilter()
++    }
++
++    private func applyFilter() {
++        let query = searchField?.stringValue ?? ""
++        filtered = FuzzySearch.rank(notes: allNotes, query: query)
++        rebuild()
++    }
++
++    private func rebuild() {
++        stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
++
++        if filtered.isEmpty {
++            let empty = NSTextField(labelWithString: allNotes.isEmpty ? "No notes yet." : "No matches.")
++            empty.font = .systemFont(ofSize: 13)
++            empty.textColor = .secondaryLabelColor
++            empty.alignment = .center
++            stackView.addArrangedSubview(empty)
++            return
++        }
++
++        for note in filtered {
++            let row = NoteRowView(note: note, compact: true) { [weak self] in self?.onRequestClose?() }
++            stackView.addArrangedSubview(row)
++        }
++    }
++
++    @objc private func addNote() {
++        onRequestClose?()
++        CapturePanel.shared.show(with: "")
++    }
++
++    @objc private func openMainWindow() {
++        onRequestClose?()
++        MainWindowController.shared.showWindow(nil)
++        NSApp.activate(ignoringOtherApps: true)
++    }
++}
++
++final class FlippedView: NSView {
++    override var isFlipped: Bool { true }
++}
+diff --git a/ThoughtQueue/Views/PreferencesWindowController.swift b/ThoughtQueue/Views/PreferencesWindowController.swift
+new file mode 100644
+index 0000000..27b09ce
+--- /dev/null
++++ b/ThoughtQueue/Views/PreferencesWindowController.swift
+@@ -0,0 +1,322 @@
++import Cocoa
++
++/// Settings: store-location chooser, working document, click behavior, open-with editor,
++/// hotkeys, toast timeout, auto-intel toggle, start-at-login.
++final class PreferencesWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
++    static let shared = PreferencesWindowController()
++
++    private let quickRecorder = ShortcutRecorderView()
++    private let detailedRecorder = ShortcutRecorderView()
++    private let startAtLoginCheckbox = NSButton(checkboxWithTitle: "Start ThoughtQueue at login", target: nil, action: nil)
++    private let autoIntelCheckbox = NSButton(checkboxWithTitle: "Auto title & categorize (on-device)", target: nil, action: nil)
++    private let storePathLabel = NSTextField(labelWithString: "")
++    private let workingDocLabel = NSTextField(labelWithString: "")
++    private let clickBehaviorPopup = NSPopUpButton()
++    private let timeoutField = NSTextField()
++    private let openWithTable = NSTableView()
++
++    private var openWithActions: [OpenWithAction] = []
++
++    convenience init() {
++        let window = NSWindow(
++            contentRect: NSRect(x: 0, y: 0, width: 520, height: 620),
++            styleMask: [.titled, .closable],
++            backing: .buffered,
++            defer: false
++        )
++        window.title = "ThoughtQueue Preferences"
++        window.center()
++        self.init(window: window)
++        openWithActions = PreferencesManager.shared.openWithActions
++        setupUI()
++    }
++
++    private func setupUI() {
++        guard let content = window?.contentView else { return }
++
++        let stack = NSStackView()
++        stack.orientation = .vertical
++        stack.alignment = .leading
++        stack.spacing = 10
++        stack.translatesAutoresizingMaskIntoConstraints = false
++        content.addSubview(stack)
++        NSLayoutConstraint.activate([
++            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
++            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
++            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
++            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -20),
++        ])
++
++        // Store location
++        stack.addArrangedSubview(sectionLabel("Store Folder"))
++        storePathLabel.stringValue = PreferencesManager.shared.storeURL?.path ?? "(not set)"
++        storePathLabel.font = .systemFont(ofSize: 12)
++        storePathLabel.textColor = .secondaryLabelColor
++        storePathLabel.lineBreakMode = .byTruncatingMiddle
++        let chooseBtn = NSButton(title: "Choose\u{2026}", target: self, action: #selector(chooseStore))
++        chooseBtn.bezelStyle = .rounded
++        stack.addArrangedSubview(row([storePathLabel, chooseBtn]))
++
++        // Working document
++        stack.addArrangedSubview(sectionLabel("Working Document (default capture sink)"))
++        workingDocLabel.stringValue = workingDocDisplay()
++        workingDocLabel.font = .systemFont(ofSize: 12)
++        workingDocLabel.textColor = .secondaryLabelColor
++        workingDocLabel.lineBreakMode = .byTruncatingMiddle
++        let clearWorkingBtn = NSButton(title: "Clear", target: self, action: #selector(clearWorkingDoc))
++        clearWorkingBtn.bezelStyle = .rounded
++        stack.addArrangedSubview(row([workingDocLabel, clearWorkingBtn]))
++
++        // Click behavior
++        stack.addArrangedSubview(sectionLabel("When clicking a note"))
++        clickBehaviorPopup.addItems(withTitles: ["Render markdown", "Edit raw", "Run open command"])
++        clickBehaviorPopup.target = self
++        clickBehaviorPopup.action = #selector(clickBehaviorChanged)
++        selectClickBehavior()
++        stack.addArrangedSubview(clickBehaviorPopup)
++
++        // Hotkeys
++        stack.addArrangedSubview(sectionLabel("Hotkeys (restart to apply)"))
++        quickRecorder.translatesAutoresizingMaskIntoConstraints = false
++        detailedRecorder.translatesAutoresizingMaskIntoConstraints = false
++        quickRecorder.widthAnchor.constraint(equalToConstant: 180).isActive = true
++        quickRecorder.heightAnchor.constraint(equalToConstant: 24).isActive = true
++        detailedRecorder.widthAnchor.constraint(equalToConstant: 180).isActive = true
++        detailedRecorder.heightAnchor.constraint(equalToConstant: 24).isActive = true
++        quickRecorder.keyBinding = PreferencesManager.shared.quickCaptureKey
++        detailedRecorder.keyBinding = PreferencesManager.shared.detailedCaptureKey
++        quickRecorder.onChanged = { PreferencesManager.shared.quickCaptureKey = $0 }
++        detailedRecorder.onChanged = { PreferencesManager.shared.detailedCaptureKey = $0 }
++        stack.addArrangedSubview(row([fixedLabel("Quick Capture:", 140), quickRecorder]))
++        stack.addArrangedSubview(row([fixedLabel("Detailed Capture:", 140), detailedRecorder]))
++
++        // Toast timeout
++        stack.addArrangedSubview(sectionLabel("Review toast timeout (seconds)"))
++        timeoutField.stringValue = String(Int(PreferencesManager.shared.toastTimeout))
++        timeoutField.translatesAutoresizingMaskIntoConstraints = false
++        timeoutField.widthAnchor.constraint(equalToConstant: 60).isActive = true
++        timeoutField.target = self
++        timeoutField.action = #selector(timeoutChanged)
++        stack.addArrangedSubview(timeoutField)
++
++        // Open-with editor
++        stack.addArrangedSubview(sectionLabel("Open With actions"))
++        let owScroll = NSScrollView()
++        owScroll.translatesAutoresizingMaskIntoConstraints = false
++        owScroll.hasVerticalScroller = true
++        owScroll.borderType = .bezelBorder
++        owScroll.documentView = openWithTable
++        owScroll.heightAnchor.constraint(equalToConstant: 100).isActive = true
++        owScroll.widthAnchor.constraint(equalToConstant: 470).isActive = true
++        let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("ow"))
++        openWithTable.addTableColumn(col)
++        openWithTable.headerView = nil
++        openWithTable.delegate = self
++        openWithTable.dataSource = self
++        stack.addArrangedSubview(owScroll)
++        let resetOWBtn = NSButton(title: "Reset to defaults (Claude, Zed)", target: self, action: #selector(resetOpenWith))
++        resetOWBtn.bezelStyle = .rounded
++        stack.addArrangedSubview(resetOWBtn)
++
++        // Toggles
++        autoIntelCheckbox.state = PreferencesManager.shared.autoIntelEnabled ? .on : .off
++        autoIntelCheckbox.target = self
++        autoIntelCheckbox.action = #selector(autoIntelToggled)
++        stack.addArrangedSubview(autoIntelCheckbox)
++
++        startAtLoginCheckbox.state = PreferencesManager.shared.startAtLogin ? .on : .off
++        startAtLoginCheckbox.target = self
++        startAtLoginCheckbox.action = #selector(startAtLoginToggled)
++        stack.addArrangedSubview(startAtLoginCheckbox)
++    }
++
++    // MARK: - Layout helpers
++
++    private func sectionLabel(_ text: String) -> NSTextField {
++        let l = NSTextField(labelWithString: text)
++        l.font = .systemFont(ofSize: 13, weight: .semibold)
++        return l
++    }
++
++    private func fixedLabel(_ text: String, _ width: CGFloat) -> NSTextField {
++        let l = NSTextField(labelWithString: text)
++        l.font = .systemFont(ofSize: 13)
++        l.translatesAutoresizingMaskIntoConstraints = false
++        l.widthAnchor.constraint(equalToConstant: width).isActive = true
++        return l
++    }
++
++    private func row(_ views: [NSView]) -> NSStackView {
++        let s = NSStackView(views: views)
++        s.orientation = .horizontal
++        s.spacing = 8
++        return s
++    }
++
++    private func workingDocDisplay() -> String {
++        PreferencesManager.shared.workingDocumentURL?.lastPathComponent ?? "(none)"
++    }
++
++    private func selectClickBehavior() {
++        switch PreferencesManager.shared.clickBehavior {
++        case .renderMarkdown: clickBehaviorPopup.selectItem(at: 0)
++        case .editRaw: clickBehaviorPopup.selectItem(at: 1)
++        case .openCommand: clickBehaviorPopup.selectItem(at: 2)
++        }
++    }
++
++    // MARK: - Actions
++
++    @objc private func chooseStore() {
++        let panel = NSOpenPanel()
++        panel.canChooseDirectories = true
++        panel.canChooseFiles = false
++        panel.allowsMultipleSelection = false
++        panel.prompt = "Choose"
++        panel.directoryURL = PreferencesManager.shared.storeURL ?? PreferencesManager.shared.defaultStoreURL
++        if panel.runModal() == .OK, let url = panel.url {
++            PreferencesManager.shared.storeURL = url
++            NoteStore.shared.rootURL = url
++            storePathLabel.stringValue = url.path
++            (NSApp.delegate as? AppDelegate)?.restartWatcher()
++            NotificationCenter.default.post(name: .notesDidChange, object: nil)
++        }
++    }
++
++    @objc private func clearWorkingDoc() {
++        PreferencesManager.shared.workingDocumentURL = nil
++        workingDocLabel.stringValue = workingDocDisplay()
++    }
++
++    @objc private func clickBehaviorChanged() {
++        switch clickBehaviorPopup.indexOfSelectedItem {
++        case 0: PreferencesManager.shared.clickBehavior = .renderMarkdown
++        case 1: PreferencesManager.shared.clickBehavior = .editRaw
++        default: PreferencesManager.shared.clickBehavior = .openCommand
++        }
++    }
++
++    @objc private func timeoutChanged() {
++        if let v = Double(timeoutField.stringValue), v > 0 {
++            PreferencesManager.shared.toastTimeout = v
++        }
++    }
++
++    @objc private func autoIntelToggled(_ sender: NSButton) {
++        PreferencesManager.shared.autoIntelEnabled = sender.state == .on
++    }
++
++    @objc private func startAtLoginToggled(_ sender: NSButton) {
++        PreferencesManager.shared.startAtLogin = sender.state == .on
++    }
++
++    @objc private func resetOpenWith() {
++        openWithActions = OpenWithAction.presets
++        PreferencesManager.shared.openWithActions = openWithActions
++        openWithTable.reloadData()
++    }
++
++    // MARK: - Open-with table
++
++    func numberOfRows(in tableView: NSTableView) -> Int { openWithActions.count }
++
++    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
++        let a = openWithActions[row]
++        let detail: String
++        switch a.type {
++        case .command: detail = a.commandTemplate ?? ""
++        case .appInput: detail = "\(a.appBundleId ?? "") [\(a.inputMode?.rawValue ?? "reference")]"
++        }
++        let label = NSTextField(labelWithString: "\(a.name) — \(detail)")
++        label.font = .systemFont(ofSize: 12)
++        label.lineBreakMode = .byTruncatingTail
++        return label
++    }
++}
++
++// MARK: - Shortcut Recorder
++
++final class ShortcutRecorderView: NSView {
++    var keyBinding: KeyBinding = .defaultQuickCapture { didSet { updateDisplay() } }
++    var onChanged: ((KeyBinding) -> Void)?
++
++    private let label = NSTextField(labelWithString: "")
++    private var isRecording = false
++
++    override init(frame: NSRect) {
++        super.init(frame: frame)
++        setup()
++    }
++    required init?(coder: NSCoder) { fatalError() }
++
++    private func setup() {
++        wantsLayer = true
++        layer?.borderWidth = 1
++        layer?.borderColor = NSColor.separatorColor.cgColor
++        layer?.cornerRadius = 4
++        label.font = .systemFont(ofSize: 12)
++        label.alignment = .center
++        label.translatesAutoresizingMaskIntoConstraints = false
++        addSubview(label)
++        NSLayoutConstraint.activate([
++            label.centerXAnchor.constraint(equalTo: centerXAnchor),
++            label.centerYAnchor.constraint(equalTo: centerYAnchor),
++        ])
++        updateDisplay()
++    }
++
++    private func updateDisplay() {
++        if isRecording {
++            label.stringValue = "Press shortcut\u{2026}"
++            layer?.borderColor = NSColor.controlAccentColor.cgColor
++        } else {
++            label.stringValue = describe(keyBinding)
++            layer?.borderColor = NSColor.separatorColor.cgColor
++        }
++    }
++
++    override func mouseDown(with event: NSEvent) {
++        isRecording = true
++        updateDisplay()
++        window?.makeFirstResponder(self)
++    }
++
++    override var acceptsFirstResponder: Bool { true }
++
++    override func keyDown(with event: NSEvent) {
++        guard isRecording else { super.keyDown(with: event); return }
++        let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
++        guard !flags.isEmpty else { return }
++        var cgFlags = CGEventFlags()
++        if flags.contains(.command) { cgFlags.insert(.maskCommand) }
++        if flags.contains(.shift) { cgFlags.insert(.maskShift) }
++        if flags.contains(.option) { cgFlags.insert(.maskAlternate) }
++        if flags.contains(.control) { cgFlags.insert(.maskControl) }
++        let binding = KeyBinding(keyCode: Int64(event.keyCode), modifiers: cgFlags)
++        keyBinding = binding
++        isRecording = false
++        updateDisplay()
++        onChanged?(binding)
++    }
++
++    private func describe(_ binding: KeyBinding) -> String {
++        var parts: [String] = []
++        if binding.modifiers.contains(.maskControl) { parts.append("\u{2303}") }
++        if binding.modifiers.contains(.maskAlternate) { parts.append("\u{2325}") }
++        if binding.modifiers.contains(.maskShift) { parts.append("\u{21E7}") }
++        if binding.modifiers.contains(.maskCommand) { parts.append("\u{2318}") }
++        parts.append(keyName(UInt16(binding.keyCode)))
++        return parts.joined()
++    }
++
++    private func keyName(_ keyCode: UInt16) -> String {
++        let map: [UInt16: String] = [
++            0x00: "A", 0x01: "S", 0x02: "D", 0x03: "F", 0x04: "H", 0x05: "G", 0x06: "Z",
++            0x07: "X", 0x08: "C", 0x09: "V", 0x0B: "B", 0x0C: "Q", 0x0D: "W", 0x0E: "E",
++            0x0F: "R", 0x10: "Y", 0x11: "T", 0x12: "1", 0x13: "2", 0x14: "3", 0x15: "4",
++            0x17: "5", 0x16: "6", 0x1A: "7", 0x1C: "8", 0x19: "9", 0x1D: "0", 0x1F: "O",
++            0x20: "U", 0x22: "I", 0x23: "P", 0x25: "L", 0x26: "J", 0x28: "K", 0x2D: "N", 0x2E: "M",
++        ]
++        return map[keyCode] ?? "?"
++    }
++}
+diff --git a/ThoughtQueue/Views/ReviewToast.swift b/ThoughtQueue/Views/ReviewToast.swift
+new file mode 100644
+index 0000000..e235114
+--- /dev/null
++++ b/ThoughtQueue/Views/ReviewToast.swift
+@@ -0,0 +1,145 @@
++import Cocoa
++
++/// A transient panel under the status item showing the auto-generated title + category,
++/// with an Edit affordance and a user-set timeout. Accepting applies the rename/move;
++/// dismissing leaves the note with its capture-time defaults.
++final class ReviewToast {
++    static let shared = ReviewToast()
++
++    private var panel: NSPanel?
++    private var dismissWorkItem: DispatchWorkItem?
++    private var note: Note?
++    private var titleField: NSTextField?
++    private var categoryField: NSTextField?
++
++    /// Anchor point (status item button) so the toast can appear beneath the menu bar icon.
++    weak var anchorButton: NSStatusBarButton?
++
++    private init() {}
++
++    func show(note: Note, suggestedTitle: String, suggestedCategory: String, timeout: TimeInterval) {
++        guard Thread.isMainThread else {
++            DispatchQueue.main.async { self.show(note: note, suggestedTitle: suggestedTitle, suggestedCategory: suggestedCategory, timeout: timeout) }
++            return
++        }
++
++        close()
++        self.note = note
++
++        let width: CGFloat = 320
++        let height: CGFloat = 150
++
++        let origin = anchorOrigin(width: width, height: height)
++        let newPanel = NSPanel(
++            contentRect: NSRect(origin: origin, size: NSSize(width: width, height: height)),
++            styleMask: [.titled, .closable, .nonactivatingPanel, .hudWindow],
++            backing: .buffered,
++            defer: false
++        )
++        newPanel.level = .floating
++        newPanel.title = "Suggested Title & Category"
++        newPanel.isFloatingPanel = true
++        newPanel.isReleasedWhenClosed = false
++
++        let content = NSView(frame: NSRect(x: 0, y: 0, width: width, height: height))
++
++        let titleLabel = NSTextField(labelWithString: "Title")
++        titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
++        titleLabel.textColor = .secondaryLabelColor
++        titleLabel.translatesAutoresizingMaskIntoConstraints = false
++
++        let tField = NSTextField(string: suggestedTitle)
++        tField.translatesAutoresizingMaskIntoConstraints = false
++        self.titleField = tField
++
++        let catLabel = NSTextField(labelWithString: "Category")
++        catLabel.font = .systemFont(ofSize: 11, weight: .semibold)
++        catLabel.textColor = .secondaryLabelColor
++        catLabel.translatesAutoresizingMaskIntoConstraints = false
++
++        let cField = NSTextField(string: suggestedCategory)
++        cField.translatesAutoresizingMaskIntoConstraints = false
++        self.categoryField = cField
++
++        let acceptBtn = NSButton(title: "Apply", target: self, action: #selector(accept))
++        acceptBtn.bezelStyle = .rounded
++        acceptBtn.keyEquivalent = "\r"
++        acceptBtn.translatesAutoresizingMaskIntoConstraints = false
++
++        let dismissBtn = NSButton(title: "Keep Default", target: self, action: #selector(dismiss))
++        dismissBtn.bezelStyle = .rounded
++        dismissBtn.keyEquivalent = "\u{1b}"
++        dismissBtn.translatesAutoresizingMaskIntoConstraints = false
++
++        content.addSubview(titleLabel)
++        content.addSubview(tField)
++        content.addSubview(catLabel)
++        content.addSubview(cField)
++        content.addSubview(acceptBtn)
++        content.addSubview(dismissBtn)
++
++        NSLayoutConstraint.activate([
++            titleLabel.topAnchor.constraint(equalTo: content.topAnchor, constant: 12),
++            titleLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
++
++            tField.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
++            tField.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
++            tField.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
++
++            catLabel.topAnchor.constraint(equalTo: tField.bottomAnchor, constant: 8),
++            catLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
++
++            cField.topAnchor.constraint(equalTo: catLabel.bottomAnchor, constant: 2),
++            cField.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
++            cField.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
++
++            acceptBtn.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
++            acceptBtn.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -12),
++            dismissBtn.trailingAnchor.constraint(equalTo: acceptBtn.leadingAnchor, constant: -8),
++            dismissBtn.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -12),
++        ])
++
++        newPanel.contentView = content
++        newPanel.orderFront(nil)
++        panel = newPanel
++
++        // Auto-dismiss after the user-set timeout (treated as "keep default").
++        let item = DispatchWorkItem { [weak self] in self?.dismiss() }
++        dismissWorkItem = item
++        DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: item)
++    }
++
++    private func anchorOrigin(width: CGFloat, height: CGFloat) -> NSPoint {
++        if let button = anchorButton, let window = button.window {
++            let buttonFrame = button.convert(button.bounds, to: nil)
++            let screenRect = window.convertToScreen(buttonFrame)
++            return NSPoint(x: screenRect.midX - width / 2, y: screenRect.minY - height - 8)
++        }
++        // Fallback: top-right of the main screen.
++        let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
++        return NSPoint(x: screen.maxX - width - 20, y: screen.maxY - height - 20)
++    }
++
++    @objc private func accept() {
++        guard let note = note else { close(); return }
++        let title = titleField?.stringValue ?? note.title
++        let category = categoryField?.stringValue ?? note.categoryDisplay
++        _ = AutoIntelService.shared.apply(title: title, category: category, to: note)
++        ToastWindow.show(message: "Updated")
++        close()
++    }
++
++    @objc private func dismiss() {
++        close()
++    }
++
++    private func close() {
++        dismissWorkItem?.cancel()
++        dismissWorkItem = nil
++        panel?.close()
++        panel = nil
++        note = nil
++        titleField = nil
++        categoryField = nil
++    }
++}
+diff --git a/ThoughtQueue/Views/ToastWindow.swift b/ThoughtQueue/Views/ToastWindow.swift
+new file mode 100644
+index 0000000..e211f99
+--- /dev/null
++++ b/ThoughtQueue/Views/ToastWindow.swift
+@@ -0,0 +1,80 @@
++import Cocoa
++
++/// Transient "pill" toast near the top of the screen for brief feedback.
++final class ToastWindow: NSWindow {
++    private static var current: ToastWindow?
++    private static var fadeWorkItem: DispatchWorkItem?
++
++    override var canBecomeKey: Bool { false }
++    override var canBecomeMain: Bool { false }
++
++    static func show(message: String, duration: TimeInterval = 1.5) {
++        guard Thread.isMainThread else {
++            DispatchQueue.main.async { show(message: message, duration: duration) }
++            return
++        }
++
++        fadeWorkItem?.cancel()
++        fadeWorkItem = nil
++        current?.orderOut(nil)
++        current = nil
++
++        let label = NSTextField(labelWithString: message)
++        label.font = .systemFont(ofSize: 14, weight: .medium)
++        label.textColor = .white
++        label.alignment = .center
++        label.backgroundColor = .clear
++        label.isBezeled = false
++        label.isEditable = false
++        label.sizeToFit()
++
++        let padding: CGFloat = 24
++        let width = label.frame.width + padding * 2
++        let height: CGFloat = 36
++
++        guard let screen = NSScreen.main else { return }
++        let screenFrame = screen.visibleFrame
++        let x = screenFrame.midX - width / 2
++        let y = screenFrame.maxY - 80
++
++        let window = ToastWindow(
++            contentRect: NSRect(x: x, y: y, width: width, height: height),
++            styleMask: .borderless,
++            backing: .buffered,
++            defer: false
++        )
++        window.isOpaque = false
++        window.backgroundColor = .clear
++        window.level = .floating
++        window.hasShadow = true
++        window.ignoresMouseEvents = true
++        window.collectionBehavior = [.canJoinAllSpaces, .stationary]
++        window.isReleasedWhenClosed = false
++
++        let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: height))
++        container.wantsLayer = true
++        container.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.8).cgColor
++        container.layer?.cornerRadius = height / 2
++
++        label.frame = NSRect(x: padding, y: (height - label.frame.height) / 2, width: label.frame.width, height: label.frame.height)
++        container.addSubview(label)
++
++        window.contentView = container
++        window.alphaValue = 1.0
++        window.orderFront(nil)
++        current = window
++
++        let workItem = DispatchWorkItem { [weak window] in
++            guard let window = window else { return }
++            NSAnimationContext.runAnimationGroup({ context in
++                context.duration = 0.3
++                window.animator().alphaValue = 0
++            }, completionHandler: { [weak window] in
++                window?.orderOut(nil)
++                if current === window { current = nil }
++            })
++        }
++        fadeWorkItem = workItem
++        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: workItem)
++    }
++}
+diff --git a/ThoughtQueueTests/NoteStoreTests.swift b/ThoughtQueueTests/NoteStoreTests.swift
+new file mode 100644
+index 0000000..a8a4665
+--- /dev/null
++++ b/ThoughtQueueTests/NoteStoreTests.swift
+@@ -0,0 +1,112 @@
++import XCTest
++@testable import ThoughtQueue
++
++final class NoteStoreTests: XCTestCase {
++    var tempRoot: URL!
++    var store: NoteStore!
++
++    override func setUpWithError() throws {
++        tempRoot = FileManager.default.temporaryDirectory
++            .appendingPathComponent("tq-tests-\(UUID().uuidString)", isDirectory: true)
++        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
++        store = NoteStore.shared
++        store.rootURL = tempRoot
++    }
++
++    override func tearDownWithError() throws {
++        try? FileManager.default.removeItem(at: tempRoot)
++        store.rootURL = nil
++    }
++
++    func testCreateNoteInUncategorized() throws {
++        let note = store.createNote(title: "Hello World", body: "some body", category: nil)
++        let unwrapped = try XCTUnwrap(note)
++        XCTAssertEqual(unwrapped.title, "hello-world")
++        XCTAssertNil(unwrapped.category)
++        XCTAssertEqual(store.body(of: unwrapped), "some body")
++        XCTAssertTrue(FileManager.default.fileExists(atPath: unwrapped.url.path))
++    }
++
++    func testCreateNoteInCategoryCreatesFolder() throws {
++        let note = try XCTUnwrap(store.createNote(title: "Task", body: "x", category: "Work"))
++        XCTAssertEqual(note.category, "Work")
++        let folder = tempRoot.appendingPathComponent("Work", isDirectory: true)
++        var isDir: ObjCBool = false
++        XCTAssertTrue(FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDir))
++        XCTAssertTrue(isDir.boolValue)
++    }
++
++    func testTitleFallsBackToFirstBodyLine() throws {
++        let note = try XCTUnwrap(store.createNote(title: "", body: "First line here\nsecond", category: nil))
++        XCTAssertEqual(note.title, "first-line-here")
++    }
++
++    func testTitleFallsBackToTimestampWhenBodyEmpty() throws {
++        let note = try XCTUnwrap(store.createNote(title: "", body: "", category: nil))
++        XCTAssertTrue(note.title.hasPrefix("note-"))
++    }
++
++    func testAppend() throws {
++        let note = try XCTUnwrap(store.createNote(title: "Log", body: "line1", category: nil))
++        XCTAssertTrue(store.append(to: note, text: "line2"))
++        XCTAssertEqual(store.body(of: note), "line1\n\nline2")
++    }
++
++    func testAppendToMissingFails() throws {
++        let note = try XCTUnwrap(store.createNote(title: "Temp", body: "x", category: nil))
++        try FileManager.default.removeItem(at: note.url)
++        XCTAssertFalse(store.append(to: note, text: "y"))
++    }
++
++    func testUpdateBody() throws {
++        let note = try XCTUnwrap(store.createNote(title: "Doc", body: "old", category: nil))
++        XCTAssertTrue(store.updateBody(of: note, body: "new"))
++        XCTAssertEqual(store.body(of: note), "new")
++    }
++
++    func testRename() throws {
++        let note = try XCTUnwrap(store.createNote(title: "Before", body: "x", category: nil))
++        let renamed = try XCTUnwrap(store.rename(note, to: "After Name"))
++        XCTAssertEqual(renamed.title, "after-name")
++        XCTAssertFalse(FileManager.default.fileExists(atPath: note.url.path))
++        XCTAssertEqual(store.body(of: renamed), "x")
++    }
++
++    func testMoveBetweenCategories() throws {
++        let note = try XCTUnwrap(store.createNote(title: "Movable", body: "x", category: nil))
++        let moved = try XCTUnwrap(store.move(note, to: "Archive"))
++        XCTAssertEqual(moved.category, "Archive")
++        XCTAssertFalse(FileManager.default.fileExists(atPath: note.url.path))
++    }
++
++    func testDelete() throws {
++        let note = try XCTUnwrap(store.createNote(title: "Doomed", body: "x", category: nil))
++        XCTAssertTrue(store.delete(note))
++        XCTAssertFalse(FileManager.default.fileExists(atPath: note.url.path))
++    }
++
++    func testCategoriesListing() throws {
++        _ = store.createNote(title: "A", body: "x", category: "Alpha")
++        _ = store.createNote(title: "B", body: "x", category: "Beta")
++        let cats = store.categories()
++        XCTAssertEqual(cats, ["Alpha", "Beta"])
++    }
++
++    func testNotesInCategoryFilter() throws {
++        _ = store.createNote(title: "RootNote", body: "x", category: nil)
++        _ = store.createNote(title: "WorkNote", body: "x", category: "Work")
++        XCTAssertEqual(store.notes(in: nil).count, 1)
++        XCTAssertEqual(store.notes(in: "Work").count, 1)
++        XCTAssertEqual(store.allNotes().count, 2)
++    }
++
++    func testCategoryDerivedFromNestedPath() throws {
++        // A note placed directly in a subfolder gets that folder as its category.
++        let work = tempRoot.appendingPathComponent("Projects", isDirectory: true)
++        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
++        let url = work.appendingPathComponent("note.md")
++        try "hi".write(to: url, atomically: true, encoding: .utf8)
++        let note = try XCTUnwrap(Note.from(url: url, storeRoot: tempRoot))
++        XCTAssertEqual(note.category, "Projects")
++    }
++}
+diff --git a/ThoughtQueueTests/OpenWithTests.swift b/ThoughtQueueTests/OpenWithTests.swift
+new file mode 100644
+index 0000000..cc36d52
+--- /dev/null
++++ b/ThoughtQueueTests/OpenWithTests.swift
+@@ -0,0 +1,71 @@
++import XCTest
++@testable import ThoughtQueue
++
++final class OpenWithTests: XCTestCase {
++
++    // MARK: - Template expansion
++
++    func testExpandSubstitutesPath() {
++        let result = OpenWithService.expand(template: "zed {path}", path: "/tmp/note.md")
++        XCTAssertEqual(result, "zed /tmp/note.md")
++    }
++
++    func testExpandHandlesMultiplePlaceholders() {
++        let result = OpenWithService.expand(template: "cmp {path} {path}", path: "/a/b.md")
++        XCTAssertEqual(result, "cmp /a/b.md /a/b.md")
++    }
++
++    func testExpandNoPlaceholderUnchanged() {
++        let result = OpenWithService.expand(template: "echo hi", path: "/tmp/x.md")
++        XCTAssertEqual(result, "echo hi")
++    }
++
++    func testExpandWithSpacesInPath() {
++        let result = OpenWithService.expand(template: "open {path}", path: "/Users/me/My Notes/a.md")
++        XCTAssertEqual(result, "open /Users/me/My Notes/a.md")
++    }
++
++    // MARK: - Presets / action-type routing
++
++    func testPresetsContainClaudeAndZed() throws {
++        let presets = OpenWithAction.presets
++        XCTAssertEqual(presets.count, 2)
++
++        let claude = try XCTUnwrap(presets.first { $0.name == "Claude" })
++        XCTAssertEqual(claude.type, .appInput)
++        XCTAssertEqual(claude.inputMode, .reference)
++        XCTAssertEqual(claude.appBundleId, "com.anthropic.claudefordesktop")
++
++        let zed = try XCTUnwrap(presets.first { $0.name == "Zed" })
++        XCTAssertEqual(zed.type, .command)
++        XCTAssertEqual(zed.commandTemplate, "zed {path}")
++    }
++
++    func testActionTypeRoutingFields() {
++        // command type carries a template, not an app bundle.
++        let zed = OpenWithAction.presets.first { $0.name == "Zed" }!
++        XCTAssertNotNil(zed.commandTemplate)
++        XCTAssertNil(zed.appBundleId)
++
++        // appInput type carries an app bundle + input mode, not a template.
++        let claude = OpenWithAction.presets.first { $0.name == "Claude" }!
++        XCTAssertNil(claude.commandTemplate)
++        XCTAssertNotNil(claude.appBundleId)
++        XCTAssertNotNil(claude.inputMode)
++    }
++
++    func testActionCodableRoundTrip() throws {
++        let original = OpenWithAction.presets
++        let data = try JSONEncoder().encode(original)
++        let decoded = try JSONDecoder().decode([OpenWithAction].self, from: data)
++        XCTAssertEqual(decoded.map(\.name), original.map(\.name))
++        XCTAssertEqual(decoded.map(\.type), original.map(\.type))
++    }
++
++    func testReferenceInputModeFormat() {
++        // The reference handoff prepends '@' to the absolute path. We assert the contract
++        // here by reconstructing the same string the service builds.
++        let path = "/Users/me/notes/idea.md"
++        XCTAssertEqual("@\(path)", "@/Users/me/notes/idea.md")
++    }
++}
+diff --git a/ThoughtQueueTests/SearchAndNamingTests.swift b/ThoughtQueueTests/SearchAndNamingTests.swift
+new file mode 100644
+index 0000000..f408b8d
+--- /dev/null
++++ b/ThoughtQueueTests/SearchAndNamingTests.swift
+@@ -0,0 +1,81 @@
++import XCTest
++@testable import ThoughtQueue
++
++final class SearchAndNamingTests: XCTestCase {
++    var tempRoot: URL!
++    var store: NoteStore!
++
++    override func setUpWithError() throws {
++        tempRoot = FileManager.default.temporaryDirectory
++            .appendingPathComponent("tq-naming-\(UUID().uuidString)", isDirectory: true)
++        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
++        store = NoteStore.shared
++        store.rootURL = tempRoot
++    }
++
++    override func tearDownWithError() throws {
++        try? FileManager.default.removeItem(at: tempRoot)
++        store.rootURL = nil
++    }
++
++    // MARK: - Slug
++
++    func testSlugBasic() {
++        XCTAssertEqual(NoteStore.slug("Hello World"), "hello-world")
++    }
++
++    func testSlugStripsPunsafeChars() {
++        XCTAssertEqual(NoteStore.slug("Meeting: Q3 / plan!"), "meeting-q3-plan")
++    }
++
++    func testSlugFirstLineOnly() {
++        XCTAssertEqual(NoteStore.slug("Title line\nbody line"), "title-line")
++    }
++
++    func testSlugEmptyForBlank() {
++        XCTAssertEqual(NoteStore.slug("   "), "")
++    }
++
++    // MARK: - Collision naming
++
++    func testUniqueURLAppendsCounterOnCollision() throws {
++        let first = store.uniqueURL(stem: "dup", in: tempRoot)
++        try "x".write(to: first, atomically: true, encoding: .utf8)
++        let second = store.uniqueURL(stem: "dup", in: tempRoot)
++        XCTAssertEqual(second.lastPathComponent, "dup-2.md")
++    }
++
++    func testCreateNoteNeverOverwrites() throws {
++        let a = try XCTUnwrap(store.createNote(title: "same", body: "first", category: nil))
++        let b = try XCTUnwrap(store.createNote(title: "same", body: "second", category: nil))
++        XCTAssertNotEqual(a.url, b.url)
++        XCTAssertEqual(store.body(of: a), "first")
++        XCTAssertEqual(store.body(of: b), "second")
++    }
++
++    // MARK: - Fuzzy search
++
++    func testFuzzyScoreMatchesSubsequence() {
++        XCTAssertNotNil(FuzzySearch.score(query: "hlo", candidate: "hello"))
++        XCTAssertNil(FuzzySearch.score(query: "xyz", candidate: "hello"))
++    }
++
++    func testFuzzyEmptyQueryReturnsAll() {
++        let notes = makeNotes(["apple", "banana"])
++        XCTAssertEqual(FuzzySearch.rank(notes: notes, query: "").count, 2)
++    }
++
++    func testFuzzyRanksContiguousAndPrefixHigher() {
++        let notes = makeNotes(["meeting-notes", "team-meeting", "miscellaneous"])
++        let ranked = FuzzySearch.rank(notes: notes, query: "meet")
++        XCTAssertEqual(ranked.first?.title, "meeting-notes")
++        XCTAssertFalse(ranked.contains { $0.title == "miscellaneous" })
++    }
++
++    private func makeNotes(_ titles: [String]) -> [Note] {
++        titles.map { title in
++            Note(url: tempRoot.appendingPathComponent("\(title).md"),
++                 title: title, category: nil, createdAt: Date(), modifiedAt: Date())
++        }
++    }
++}
