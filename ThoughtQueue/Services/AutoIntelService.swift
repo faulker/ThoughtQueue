@@ -62,7 +62,7 @@ final class AutoIntelService {
         let categories = currentCategoryList()
         let categoryHint = categories.isEmpty
             ? "Pick a short, general one-or-two word category."
-            : "Prefer one of these existing categories if it fits: \(categories.joined(separator: ", ")). Otherwise propose a short new one."
+            : "You MUST reuse one of these existing categories whenever the note plausibly fits it, copying its exact spelling: \(categories.joined(separator: ", ")). Only invent a short new category when none of them fit."
 
         let instructions = """
         You generate metadata for a quick note. Produce a concise title (max 6 words, no quotes) \
@@ -78,7 +78,10 @@ final class AutoIntelService {
             let title = meta.title.trimmingCharacters(in: .whitespacesAndNewlines)
             let category = meta.category.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !title.isEmpty else { return nil }
-            return Suggestion(title: title, category: category.isEmpty ? Note.uncategorized : category)
+            let resolved = category.isEmpty
+                ? Note.uncategorized
+                : Self.matchExistingCategory(category, in: categories)
+            return Suggestion(title: title, category: resolved)
         } catch {
             log.error("Foundation Models generation failed: \(error.localizedDescription)")
             return nil
@@ -88,6 +91,13 @@ final class AutoIntelService {
 
     private func currentCategoryList() -> [String] {
         NoteStore.shared.categories()
+    }
+
+    /// Snap a model-proposed category onto an existing one when it matches case-insensitively,
+    /// so "work"/"Work" reuse the same folder instead of creating a near-duplicate. Returns the
+    /// existing category's exact spelling on a match, otherwise the proposed name unchanged.
+    static func matchExistingCategory(_ proposed: String, in existing: [String]) -> String {
+        existing.first { $0.localizedCaseInsensitiveCompare(proposed) == .orderedSame } ?? proposed
     }
 
     // MARK: - Review

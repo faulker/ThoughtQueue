@@ -26,11 +26,13 @@ final class CaptureService {
         }
     }
 
-    /// Detailed capture: grab the selection and open the capture panel for edit + target choice.
+    /// Detailed capture: grab the selection and open the unified note editor pre-filled with
+    /// it (in edit mode) so the user can adjust the title, category, and body before it lands.
     func showDetailedCapture() {
-        grabSelectedText { text, savedClipboard in
+        grabSelectedText { [weak self] text, savedClipboard in
             restoreClipboard(savedClipboard)
-            CapturePanel.shared.show(with: text ?? "")
+            let category = self?.defaultCategoryFromWorkingDoc()
+            NoteWindowController.showNew(body: text ?? "", category: category)
         }
     }
 

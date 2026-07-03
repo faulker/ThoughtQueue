@@ -188,7 +188,7 @@ final class PopoverViewController: NSViewController, NSSearchFieldDelegate {
 
     @objc private func addNote() {
         onRequestClose?()
-        CapturePanel.shared.show(with: "")
+        NoteWindowController.showNew()
     }
 
     @objc private func openMainWindow() {

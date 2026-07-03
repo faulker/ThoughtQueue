@@ -9,11 +9,11 @@
 /* Begin PBXBuildFile section */
 		0408415B14778A0261C8CF42 /* OpenWithService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81505E0C24015CF74D55C25E /* OpenWithService.swift */; };
 		0C1E0486A6E092C221D653FE /* PreferencesWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81B6CA33400DD6E1AA4C4C9 /* PreferencesWindowController.swift */; };
+		1DBA35536F2435F0570AB73F /* NoteDetailViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F9C0CA0E946497651E290B1 /* NoteDetailViewControllerTests.swift */; };
 		227CC50DEBC5583B89FC0A65 /* PreferencesManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4ABA939FA382F6AAD18D83 /* PreferencesManagerTests.swift */; };
 		23793BE184543FE6507D167D /* MarkdownRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B88640B5CD4D2E2A11EE4979 /* MarkdownRendererTests.swift */; };
 		23D25801986C49A9ADF44D32 /* PreferencesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B3AEE9D555745E4BBD03DAB /* PreferencesManager.swift */; };
 		5061115D8FED3350D0C77278 /* ToastWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1D741EA098FEA403F3A713 /* ToastWindow.swift */; };
-		5E1584BCBDFAB6AFA1ECF93D /* CapturePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC4F9E4EE9B1D02D99D454C /* CapturePanel.swift */; };
 		644BBD5A402C82BEA5090851 /* AutoIntelService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64EBD6B26F170099FE531BC2 /* AutoIntelService.swift */; };
 		6A131A7109C35F764265D72C /* NoteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB32A1974D69C0DA760ADBA3 /* NoteDetailView.swift */; };
 		6AD7BA1B94E698A3CE34720B /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC1A9A03A363DC795C406CA /* AppDelegate.swift */; };
@@ -27,6 +27,7 @@
 		B31846DF4826EDB26B1A5133 /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = E581470727BCC584E29154DF /* Note.swift */; };
 		B37DC1E25F71066404FD0466 /* ReviewToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8673FE14EFCB456AC0B0DD0 /* ReviewToast.swift */; };
 		B3D61CAE4D03ACC45ECCB2DB /* PopoverController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111961E5B4F3737B22DA8447 /* PopoverController.swift */; };
+		B6A1BA8F73ED13D4D7253204 /* NoteWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BFC637B03AD839B31132FBB /* NoteWindowController.swift */; };
 		B8CFE04CFF988023E1194CE2 /* OpenWithTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A7EF92C8ACC9C33D7C5FA64 /* OpenWithTests.swift */; };
 		BE7AE6388A3748922B5B2C6F /* NoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98338EB2FC611F4C84B0975B /* NoteStore.swift */; };
 		C3C4B0875EB65DA61D4C848F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2A50C039EC60D91FBD30BC2E /* Assets.xcassets */; };
@@ -34,6 +35,8 @@
 		DDA17C113C96444ECC170AF5 /* CaptureServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96450E0A3079E1CC546A7295 /* CaptureServiceTests.swift */; };
 		E107522DFE5E5DBF15EE843A /* NoteRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F563DDBE690F505C74116C0D /* NoteRowView.swift */; };
 		F2762077DB217E71E5E65688 /* FuzzySearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 434A8B44753B2B9E4EAD7759 /* FuzzySearch.swift */; };
+		F51668630D36231F526DEA47 /* NoteWindowControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71DD76F3016B18C829040316 /* NoteWindowControllerTests.swift */; };
+		FDAFB808B57E0CCCFF28A3D0 /* AutoIntelServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D19EA2444190D4504688A141 /* AutoIntelServiceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,11 +55,14 @@
 		111961E5B4F3737B22DA8447 /* PopoverController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverController.swift; sourceTree = "<group>"; };
 		2A50C039EC60D91FBD30BC2E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		434A8B44753B2B9E4EAD7759 /* FuzzySearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzySearch.swift; sourceTree = "<group>"; };
+		4BFC637B03AD839B31132FBB /* NoteWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteWindowController.swift; sourceTree = "<group>"; };
 		528301576346031EC40FA4B9 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		5C4ABA939FA382F6AAD18D83 /* PreferencesManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesManagerTests.swift; sourceTree = "<group>"; };
+		5F9C0CA0E946497651E290B1 /* NoteDetailViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteDetailViewControllerTests.swift; sourceTree = "<group>"; };
 		64EBD6B26F170099FE531BC2 /* AutoIntelService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoIntelService.swift; sourceTree = "<group>"; };
 		6C2BBABACAEBAC63087F8627 /* NoteStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStoreTests.swift; sourceTree = "<group>"; };
 		6EDD1604740F094B60192708 /* ThoughtQueue.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ThoughtQueue.entitlements; sourceTree = "<group>"; };
+		71DD76F3016B18C829040316 /* NoteWindowControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteWindowControllerTests.swift; sourceTree = "<group>"; };
 		7B3AEE9D555745E4BBD03DAB /* PreferencesManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesManager.swift; sourceTree = "<group>"; };
 		7CC1A9A03A363DC795C406CA /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		81505E0C24015CF74D55C25E /* OpenWithService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWithService.swift; sourceTree = "<group>"; };
@@ -69,9 +75,9 @@
 		A27EE505AFB918424D6D2695 /* CaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureService.swift; sourceTree = "<group>"; };
 		A81B6CA33400DD6E1AA4C4C9 /* PreferencesWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesWindowController.swift; sourceTree = "<group>"; };
 		A8673FE14EFCB456AC0B0DD0 /* ReviewToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewToast.swift; sourceTree = "<group>"; };
-		AAC4F9E4EE9B1D02D99D454C /* CapturePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapturePanel.swift; sourceTree = "<group>"; };
 		B88640B5CD4D2E2A11EE4979 /* MarkdownRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRendererTests.swift; sourceTree = "<group>"; };
 		CB32A1974D69C0DA760ADBA3 /* NoteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteDetailView.swift; sourceTree = "<group>"; };
+		D19EA2444190D4504688A141 /* AutoIntelServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoIntelServiceTests.swift; sourceTree = "<group>"; };
 		DEC6F736326866EB56B7C5FC /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
 		E49EC4A3F59C493F7A14ED60 /* ThoughtQueue.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ThoughtQueue.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E581470727BCC584E29154DF /* Note.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Note.swift; sourceTree = "<group>"; };
@@ -128,11 +134,11 @@
 		B5DD819C9C8EE85716230B7A /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				AAC4F9E4EE9B1D02D99D454C /* CapturePanel.swift */,
 				DEC6F736326866EB56B7C5FC /* MainWindowController.swift */,
 				820DCC5FE0F2B837244A7F30 /* MarkdownRenderer.swift */,
 				CB32A1974D69C0DA760ADBA3 /* NoteDetailView.swift */,
 				F563DDBE690F505C74116C0D /* NoteRowView.swift */,
+				4BFC637B03AD839B31132FBB /* NoteWindowController.swift */,
 				111961E5B4F3737B22DA8447 /* PopoverController.swift */,
 				A81B6CA33400DD6E1AA4C4C9 /* PreferencesWindowController.swift */,
 				A8673FE14EFCB456AC0B0DD0 /* ReviewToast.swift */,
@@ -144,9 +150,12 @@
 		BECD079207245C0ACA6E258B /* ThoughtQueueTests */ = {
 			isa = PBXGroup;
 			children = (
+				D19EA2444190D4504688A141 /* AutoIntelServiceTests.swift */,
 				96450E0A3079E1CC546A7295 /* CaptureServiceTests.swift */,
 				B88640B5CD4D2E2A11EE4979 /* MarkdownRendererTests.swift */,
+				5F9C0CA0E946497651E290B1 /* NoteDetailViewControllerTests.swift */,
 				6C2BBABACAEBAC63087F8627 /* NoteStoreTests.swift */,
+				71DD76F3016B18C829040316 /* NoteWindowControllerTests.swift */,
 				8A7EF92C8ACC9C33D7C5FA64 /* OpenWithTests.swift */,
 				5C4ABA939FA382F6AAD18D83 /* PreferencesManagerTests.swift */,
 				0127701C5E8C5172D874DB12 /* SearchAndNamingTests.swift */,
@@ -254,7 +263,6 @@
 			files = (
 				6AD7BA1B94E698A3CE34720B /* AppDelegate.swift in Sources */,
 				644BBD5A402C82BEA5090851 /* AutoIntelService.swift in Sources */,
-				5E1584BCBDFAB6AFA1ECF93D /* CapturePanel.swift in Sources */,
 				AF99BE4927B8333D4E8E189E /* CaptureService.swift in Sources */,
 				9E6B4AF4AC89C3159E8AE541 /* FolderWatcher.swift in Sources */,
 				F2762077DB217E71E5E65688 /* FuzzySearch.swift in Sources */,
@@ -265,6 +273,7 @@
 				6A131A7109C35F764265D72C /* NoteDetailView.swift in Sources */,
 				E107522DFE5E5DBF15EE843A /* NoteRowView.swift in Sources */,
 				BE7AE6388A3748922B5B2C6F /* NoteStore.swift in Sources */,
+				B6A1BA8F73ED13D4D7253204 /* NoteWindowController.swift in Sources */,
 				0408415B14778A0261C8CF42 /* OpenWithService.swift in Sources */,
 				B3D61CAE4D03ACC45ECCB2DB /* PopoverController.swift in Sources */,
 				23D25801986C49A9ADF44D32 /* PreferencesManager.swift in Sources */,
@@ -279,9 +288,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FDAFB808B57E0CCCFF28A3D0 /* AutoIntelServiceTests.swift in Sources */,
 				DDA17C113C96444ECC170AF5 /* CaptureServiceTests.swift in Sources */,
 				23793BE184543FE6507D167D /* MarkdownRendererTests.swift in Sources */,
+				1DBA35536F2435F0570AB73F /* NoteDetailViewControllerTests.swift in Sources */,
 				992471F77F1B4A1C3C0DC162 /* NoteStoreTests.swift in Sources */,
+				F51668630D36231F526DEA47 /* NoteWindowControllerTests.swift in Sources */,
 				B8CFE04CFF988023E1194CE2 /* OpenWithTests.swift in Sources */,
 				227CC50DEBC5583B89FC0A65 /* PreferencesManagerTests.swift in Sources */,
 				B285710C8892ABAF9B8D319B /* SearchAndNamingTests.swift in Sources */,

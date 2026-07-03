@@ -44,7 +44,7 @@ After adding or removing Swift source files, re-run `xcodegen generate` to updat
 - **Left-click menu bar icon**: `PopoverController` shows collapsible categories with entry previews and quick actions
 - **Right-click menu bar icon**: Context menu with "Open ThoughtQueue" (full window), Preferences, Quit
 - **MainWindowController**: NSSplitViewController with category sidebar + entries table + "Clear Completed"
-- **DetailedCapturePanel**: Floating NSPanel near cursor with editable text area + category dropdown
+- **NoteWindowController**: The single note window for creating, viewing, and editing a note (inline editable title + category dropdown, view/edit toggle). Used by "+ Add Note" and detailed capture alike.
 
 ### Default hotkeys
 
