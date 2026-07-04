@@ -15,6 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         log.info("ThoughtQueue launching")
 
+        // Show button/icon tooltips almost immediately instead of after the ~1s default (fix #4).
+        UserDefaults.standard.set(150, forKey: "NSInitialToolTipDelay")
+
         setupMainMenu()
         setupStatusItem()
 

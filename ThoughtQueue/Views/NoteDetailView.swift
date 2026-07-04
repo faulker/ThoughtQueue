@@ -27,11 +27,16 @@ final class NoteDetailViewController: NSViewController, NSTextViewDelegate, NSTe
     private var scrollView: NSScrollView!
     private var textView: ClickToEditTextView!
     private var titleField: NSTextField!
-    private var categoryLabel: NSTextField!
+    private var categoryPopup: NSPopUpButton!
     private var openWithButton: NSButton!
     private var isEditing = false
     /// True when the raw text has unsaved changes since the last save/load.
     private var isDirty = false
+
+    /// Popup title for the "no category" (store root) choice.
+    private static let uncategorizedItem = Note.uncategorized
+    /// Popup title that triggers the new-category prompt.
+    private static let newCategoryItem = "New Category\u{2026}"
 
     override func loadView() {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 500, height: 550))
@@ -49,12 +54,15 @@ final class NoteDetailViewController: NSViewController, NSTextViewDelegate, NSTe
         titleField.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(titleField)
 
-        categoryLabel = NSTextField(labelWithString: "")
-        categoryLabel.font = .systemFont(ofSize: 11)
-        categoryLabel.textColor = .secondaryLabelColor
-        categoryLabel.lineBreakMode = .byTruncatingTail
-        categoryLabel.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(categoryLabel)
+        // Category dropdown replaces the old read-only label so notes can be re-filed in the
+        // main window, mirroring the standalone note window (fix: set category in main window).
+        categoryPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+        categoryPopup.target = self
+        categoryPopup.action = #selector(categoryChanged(_:))
+        categoryPopup.toolTip = "Category"
+        categoryPopup.isEnabled = false // enabled once a note is displayed
+        categoryPopup.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(categoryPopup)
 
         openWithButton = NSButton(title: "Open With\u{2026}", target: self, action: #selector(openWith(_:)))
         openWithButton.bezelStyle = .rounded
@@ -87,11 +95,11 @@ final class NoteDetailViewController: NSViewController, NSTextViewDelegate, NSTe
             openWithButton.centerYAnchor.constraint(equalTo: titleField.centerYAnchor),
             openWithButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
 
-            categoryLabel.topAnchor.constraint(equalTo: titleField.bottomAnchor, constant: 4),
-            categoryLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            categoryLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            categoryPopup.topAnchor.constraint(equalTo: titleField.bottomAnchor, constant: 6),
+            categoryPopup.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            categoryPopup.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -16),
 
-            scrollView.topAnchor.constraint(equalTo: categoryLabel.bottomAnchor, constant: 8),
+            scrollView.topAnchor.constraint(equalTo: categoryPopup.bottomAnchor, constant: 8),
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
             scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
@@ -137,7 +145,8 @@ final class NoteDetailViewController: NSViewController, NSTextViewDelegate, NSTe
         note = nil
         titleField.stringValue = ""
         titleField.isEnabled = false
-        categoryLabel.stringValue = ""
+        categoryPopup.removeAllItems()
+        categoryPopup.isEnabled = false
         textView.isEditable = false
         textView.string = ""
     }
@@ -160,11 +169,82 @@ final class NoteDetailViewController: NSViewController, NSTextViewDelegate, NSTe
         }
     }
 
-    /// Sync the title field and category label to the given note.
+    /// Sync the title field and category dropdown to the given note.
     private func updateHeader(for note: Note) {
         titleField.stringValue = note.title
         titleField.isEnabled = true
-        categoryLabel.stringValue = note.categoryDisplay
+        categoryPopup.isEnabled = true
+        rebuildCategoryMenu()
+    }
+
+    // MARK: - Category
+
+    /// Populate the category dropdown from the store and select the note's current category.
+    private func rebuildCategoryMenu() {
+        categoryPopup.removeAllItems()
+        categoryPopup.addItem(withTitle: Self.uncategorizedItem)
+        let categories = NoteStore.shared.categories()
+        if !categories.isEmpty {
+            categoryPopup.addItems(withTitles: categories)
+        }
+        categoryPopup.menu?.addItem(.separator())
+        categoryPopup.addItem(withTitle: Self.newCategoryItem)
+        categoryPopup.selectItem(withTitle: note?.category ?? Self.uncategorizedItem)
+    }
+
+    /// Move the note to the chosen category, or prompt for a new one. Any pending title edit
+    /// is committed first so switching category never reverts the title.
+    @objc private func categoryChanged(_ sender: NSPopUpButton) {
+        guard let note = note, let chosen = sender.titleOfSelectedItem else { return }
+
+        if chosen == Self.newCategoryItem {
+            commitTitleIfNeeded()
+            promptNewCategory()
+            return
+        }
+
+        let target: String? = (chosen == Self.uncategorizedItem) ? nil : chosen
+        commitTitleIfNeeded()
+        guard target != note.category else {
+            rebuildCategoryMenu()
+            return
+        }
+        performMove(to: target)
+    }
+
+    /// Ask for a new category name, create it, then move the note into it.
+    private func promptNewCategory() {
+        let alert = NSAlert()
+        alert.messageText = "New Category"
+        alert.informativeText = "Enter a name for the new category folder:"
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
+        alert.accessoryView = input
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            rebuildCategoryMenu() // reset selection back to current
+            return
+        }
+        guard let safe = NoteStore.sanitizeCategory(input.stringValue) else {
+            rebuildCategoryMenu()
+            ToastWindow.show(message: "Invalid category name")
+            return
+        }
+        performMove(to: safe)
+    }
+
+    /// Move the note file into `category` (nil = Uncategorized) and sync UI/state.
+    private func performMove(to category: String?) {
+        guard let note = note else { return }
+        saveIfDirty()
+        guard let moved = NoteStore.shared.move(note, to: category) else {
+            rebuildCategoryMenu()
+            ToastWindow.show(message: "Move failed")
+            return
+        }
+        self.note = moved
+        updateHeader(for: moved)
+        ToastWindow.show(message: category == nil ? "Moved to Uncategorized" : "Moved to \(category!)")
     }
 
     private func renderMarkdown(_ note: Note) {
@@ -216,7 +296,15 @@ final class NoteDetailViewController: NSViewController, NSTextViewDelegate, NSTe
 
     /// Commit a title edit on focus loss (Enter/Tab or clicking away): rename the note file.
     func controlTextDidEndEditing(_ obj: Notification) {
-        guard obj.object as? NSTextField === titleField, let note = note else { return }
+        guard obj.object as? NSTextField === titleField else { return }
+        commitTitleIfNeeded()
+    }
+
+    /// Rename the note file to match the title field if it changed. No-op when unchanged or
+    /// empty. Called both on focus loss and before a category change, so a pending title edit
+    /// is never dropped when the category dropdown is used.
+    private func commitTitleIfNeeded() {
+        guard let note = note else { return }
         let typed = titleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !typed.isEmpty, typed != note.title else {
             titleField.stringValue = note.title // revert empty/no-op edits

@@ -63,6 +63,39 @@ final class NoteDetailViewControllerTests: XCTestCase {
         XCTAssertFalse(store.allNotes().contains { $0.title == "oldname" })
     }
 
+    /// The detail pane's category dropdown lists the store's categories and preselects the
+    /// displayed note's own category.
+    func testCategoryPopupReflectsAndListsCategories() throws {
+        _ = try XCTUnwrap(store.createNote(title: "Other", body: "x", category: "Personal"))
+        let note = try XCTUnwrap(store.createNote(title: "WorkNote", body: "x", category: "Work"))
+        let vc = NoteDetailViewController()
+        _ = vc.view
+        vc.display(note)
+
+        let popup = try XCTUnwrap(firstView(NSPopUpButton.self, in: vc.view))
+        XCTAssertEqual(popup.titleOfSelectedItem, "Work", "popup should preselect the note's category")
+        let titles = popup.itemTitles
+        XCTAssertTrue(titles.contains("Work"))
+        XCTAssertTrue(titles.contains("Personal"))
+        XCTAssertTrue(titles.contains(Note.uncategorized))
+    }
+
+    /// Choosing a category in the dropdown moves the note file into that folder.
+    func testChangingCategoryMovesNote() throws {
+        _ = store.createCategory("Work")
+        let note = try XCTUnwrap(store.createNote(title: "Movable", body: "x", category: nil))
+        let vc = NoteDetailViewController()
+        _ = vc.view
+        vc.display(note)
+
+        let popup = try XCTUnwrap(firstView(NSPopUpButton.self, in: vc.view))
+        popup.selectItem(withTitle: "Work")
+        popup.target?.perform(popup.action, with: popup)
+
+        XCTAssertTrue(store.allNotes().contains { $0.title == "movable" && $0.category == "Work" },
+                      "selecting a category should move the note into it")
+    }
+
     /// Recursively locate the first view of a given type in a hierarchy.
     private func firstView<T: NSView>(_ type: T.Type, in view: NSView) -> T? {
         if let match = view as? T { return match }

@@ -38,15 +38,23 @@ final class MainWindowController: NSWindowController {
         sidebarItem.maximumThickness = 260
         sidebarItem.canCollapse = false
 
+        // Distinct holding priorities keep the list|detail divider stable: without them all
+        // three panes default to the same priority, which makes AppKit treat a drag as
+        // ambiguous and snap the divider back to its starting position (fix: resize pops back).
         let listItem = NSSplitViewItem(viewController: listVC)
         listItem.minimumThickness = 240
+        listItem.holdingPriority = NSLayoutConstraint.Priority(251)
 
         let detailItem = NSSplitViewItem(viewController: detailVC)
         detailItem.minimumThickness = 300
+        detailItem.holdingPriority = NSLayoutConstraint.Priority(250)
 
         splitVC.addSplitViewItem(sidebarItem)
         splitVC.addSplitViewItem(listItem)
         splitVC.addSplitViewItem(detailItem)
+
+        // Persist divider positions across relayouts and launches.
+        splitVC.splitView.autosaveName = "ThoughtQueueMainSplit"
 
         window.contentViewController = splitVC
     }
@@ -407,6 +415,59 @@ final class NotesListViewController: NSViewController, NSTableViewDataSource, NS
         }
     }
 
+    /// Move the clicked note into the category carried by the menu item (NSNull = Uncategorized).
+    @objc private func moveClicked(_ sender: NSMenuItem) {
+        guard let note = clickedNote() else { return }
+        let target = sender.representedObject as? String // NSNull bridges to nil = Uncategorized
+        guard target != note.category else { return }
+        if NoteStore.shared.move(note, to: target) == nil {
+            ToastWindow.show(message: "Move failed")
+        }
+    }
+
+    /// Prompt for a brand-new category, create it, and move the clicked note into it.
+    @objc private func newCategoryMoveClicked() {
+        guard let note = clickedNote() else { return }
+        let alert = NSAlert()
+        alert.messageText = "New Category"
+        alert.informativeText = "Enter a name for the new category folder:"
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
+        alert.accessoryView = input
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard let safe = NoteStore.sanitizeCategory(input.stringValue) else {
+            ToastWindow.show(message: "Invalid category name")
+            return
+        }
+        if NoteStore.shared.move(note, to: safe) == nil {
+            ToastWindow.show(message: "Move failed")
+        }
+    }
+
+    /// Build the "Move to Category" submenu for a note: Uncategorized, every existing
+    /// category (current one checked), and a New Category prompt.
+    private func makeCategorySubmenu(for note: Note) -> NSMenu {
+        let sub = NSMenu()
+        let uncat = NSMenuItem(title: Note.uncategorized, action: #selector(moveClicked(_:)), keyEquivalent: "")
+        uncat.target = self
+        uncat.representedObject = NSNull()
+        uncat.state = note.category == nil ? .on : .off
+        sub.addItem(uncat)
+        for cat in NoteStore.shared.categories() {
+            let item = NSMenuItem(title: cat, action: #selector(moveClicked(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = cat
+            item.state = note.category == cat ? .on : .off
+            sub.addItem(item)
+        }
+        sub.addItem(.separator())
+        let newItem = NSMenuItem(title: "New Category\u{2026}", action: #selector(newCategoryMoveClicked), keyEquivalent: "")
+        newItem.target = self
+        sub.addItem(newItem)
+        return sub
+    }
+
     @objc private func setWorkingDoc() {
         guard let note = clickedNote() else { return }
         PreferencesManager.shared.workingDocumentURL = note.url
@@ -434,9 +495,13 @@ extension NotesListViewController: NSMenuDelegate {
         }
         working.target = self
 
+        let move = NSMenuItem(title: "Move to Category", action: nil, keyEquivalent: "")
+        move.submenu = makeCategorySubmenu(for: note)
+
         let delete = NSMenuItem(title: "Delete", action: #selector(deleteClicked), keyEquivalent: "")
         delete.target = self
         menu.addItem(rename)
+        menu.addItem(move)
         menu.addItem(working)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(delete)

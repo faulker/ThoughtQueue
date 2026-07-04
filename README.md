@@ -108,7 +108,7 @@ Click **Open** on any entry. ThoughtQueue will activate Claude Desktop, open a n
 
 ### Organize with categories
 
-Create categories from the sidebar in the full management window or from the right-click context menu. Move entries between categories with the **Move** button. Deleting a category gives you the option to move its entries to Uncategorized or delete them.
+Create categories from the sidebar in the full management window. To move a note into a different category, use the category dropdown in the note's detail pane (or its own window), right-click a note in the list and pick **Move to Category**, or use the tag button on a note row in the menu bar dropdown. Each of those also offers **New Category** to create and move in one step.
 
 ### Clear completed entries
 
