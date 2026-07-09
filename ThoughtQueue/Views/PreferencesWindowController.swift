@@ -20,6 +20,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     private let autoIntelCheckbox = NSButton(checkboxWithTitle: "Auto title & categorize (on-device)", target: nil, action: nil)
     private let storePathLabel = NSTextField(labelWithString: "")
     private let clickBehaviorPopup = NSPopUpButton()
+    private let noteEditModePopup = NSPopUpButton()
     private let editorFontLabel = NSTextField(labelWithString: "")
     private let timeoutField = NSTextField()
     private let openWithTable = NSTableView()
@@ -73,6 +74,14 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         clickBehaviorPopup.action = #selector(clickBehaviorChanged)
         selectClickBehavior()
         stack.addArrangedSubview(clickBehaviorPopup)
+
+        // Note editor edit-mode behavior
+        stack.addArrangedSubview(sectionLabel("When opening a note"))
+        noteEditModePopup.addItems(withTitles: ["Double-click to edit", "Single click to edit", "Always in edit mode"])
+        noteEditModePopup.target = self
+        noteEditModePopup.action = #selector(noteEditModeChanged)
+        selectNoteEditMode()
+        stack.addArrangedSubview(noteEditModePopup)
 
         // Note editor font
         stack.addArrangedSubview(sectionLabel("Note editor font"))
@@ -178,6 +187,14 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         }
     }
 
+    private func selectNoteEditMode() {
+        switch PreferencesManager.shared.noteEditMode {
+        case .doubleClick: noteEditModePopup.selectItem(at: 0)
+        case .singleClick: noteEditModePopup.selectItem(at: 1)
+        case .alwaysEdit: noteEditModePopup.selectItem(at: 2)
+        }
+    }
+
     // MARK: - Actions
 
     @objc private func chooseStore() {
@@ -201,6 +218,14 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         case 0: PreferencesManager.shared.clickBehavior = .renderMarkdown
         case 1: PreferencesManager.shared.clickBehavior = .editRaw
         default: PreferencesManager.shared.clickBehavior = .openCommand
+        }
+    }
+
+    @objc private func noteEditModeChanged() {
+        switch noteEditModePopup.indexOfSelectedItem {
+        case 0: PreferencesManager.shared.noteEditMode = .doubleClick
+        case 1: PreferencesManager.shared.noteEditMode = .singleClick
+        default: PreferencesManager.shared.noteEditMode = .alwaysEdit
         }
     }
 

@@ -22,6 +22,13 @@ enum ClickBehavior: String {
     case editRaw        // open a raw editor in-app
 }
 
+/// How the note editor's body text box enters edit mode when a note opens.
+enum NoteEditMode: String {
+    case doubleClick  // open in view mode; double-click (or type/paste) to edit
+    case singleClick  // open in view mode; a single click enters edit
+    case alwaysEdit   // open directly in raw-edit mode
+}
+
 /// UserDefaults-backed app configuration. Never writes anything into the store folder.
 final class PreferencesManager {
     static let shared = PreferencesManager()
@@ -37,6 +44,7 @@ final class PreferencesManager {
         static let storePath = "storeFolderPath"
         static let workingDocPath = "workingDocumentPath"
         static let clickBehavior = "clickBehavior"
+        static let noteEditMode = "noteEditMode"
         static let toastTimeout = "toastTimeout"
         static let openWithActions = "openWithActions"
         static let autoIntelEnabled = "autoIntelEnabled"
@@ -131,6 +139,12 @@ final class PreferencesManager {
     var clickBehavior: ClickBehavior {
         get { ClickBehavior(rawValue: defaults.string(forKey: Keys.clickBehavior) ?? "") ?? .renderMarkdown }
         set { defaults.set(newValue.rawValue, forKey: Keys.clickBehavior) }
+    }
+
+    /// How the note editor's body enters edit mode when a note window opens.
+    var noteEditMode: NoteEditMode {
+        get { NoteEditMode(rawValue: defaults.string(forKey: Keys.noteEditMode) ?? "") ?? .doubleClick }
+        set { defaults.set(newValue.rawValue, forKey: Keys.noteEditMode) }
     }
 
     // MARK: - Note editor font

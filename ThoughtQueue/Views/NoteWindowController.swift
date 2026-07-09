@@ -87,6 +87,13 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate {
         editor.saveIfDirty()
         NoteWindowController.open[noteURL] = nil
     }
+
+    /// Route the window's undo/redo (Edit menu, Cmd+Z/Cmd+Shift+Z) to the editor's own
+    /// undo manager instead of AppKit's lazily-created default, so we can reset it
+    /// ourselves when the buffer is reloaded outside of user typing (see `noteUndoManager`).
+    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
+        editor.noteUndoManager
+    }
 }
 
 /// An NSTextView that, while in read-only (rendered markdown) view mode, switches into edit
@@ -94,6 +101,8 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate {
 /// single click still just selects/positions, so text stays readable and selectable.
 final class ModeSwitchingTextView: NSTextView {
     var onActivateEditing: (() -> Void)?
+    /// When true, a single click (rather than a double-click) activates editing.
+    var activatesOnSingleClick = false
 
     /// Typing while read-only activates editing, then the keystroke is applied.
     override func keyDown(with event: NSEvent) {
@@ -105,9 +114,11 @@ final class ModeSwitchingTextView: NSTextView {
         }
     }
 
-    /// A double-click while read-only activates editing; a single click is left to select.
+    /// A double-click (or single click, per preference) while read-only activates editing;
+    /// otherwise a single click is left to select.
     override func mouseDown(with event: NSEvent) {
-        if !isEditable, event.clickCount >= 2, let activate = onActivateEditing {
+        let threshold = activatesOnSingleClick ? 1 : 2
+        if !isEditable, event.clickCount >= threshold, let activate = onActivateEditing {
             activate()
         }
         super.mouseDown(with: event)
@@ -140,6 +151,12 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     private var isEditing = false
     /// True when the raw text has unsaved changes since the last save/load.
     private var isDirty = false
+    /// Backs the window's undo/redo (see `NoteWindowController.windowWillReturnUndoManager`).
+    /// Typing is registered automatically by the text system; we reset this manager
+    /// ourselves whenever the buffer is replaced programmatically (mode toggle, initial
+    /// load) since those swaps bypass undo registration and would otherwise leave stale
+    /// actions pointing at text ranges that no longer exist.
+    let noteUndoManager = UndoManager()
     /// Whether the window should open straight into edit mode (new notes) vs view mode.
     private let startInEditMode: Bool
 
@@ -195,7 +212,11 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
 
         textView = ModeSwitchingTextView()
         textView.delegate = self
+        // Programmatically-created text views default this to false; without it, typing
+        // never registers undo actions at all.
+        textView.allowsUndo = true
         textView.onActivateEditing = { [weak self] in self?.beginEditingFromView() }
+        textView.activatesOnSingleClick = PreferencesManager.shared.noteEditMode == .singleClick
         textView.font = PreferencesManager.shared.editorFont
         textView.isRichText = false
         textView.isVerticallyResizable = true
@@ -233,7 +254,7 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     override func viewDidLoad() {
         super.viewDidLoad()
         rebuildCategoryMenu()
-        if startInEditMode {
+        if startInEditMode || PreferencesManager.shared.noteEditMode == .alwaysEdit {
             editRaw()
         } else {
             renderMarkdown() // default to view mode
@@ -243,8 +264,11 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
 
     override func viewDidAppear() {
         super.viewDidAppear()
-        // New notes open ready to type; put the cursor in the body.
-        if startInEditMode { view.window?.makeFirstResponder(textView) }
+        // Notes opened in edit mode (new notes, or the always-edit preference) open ready to
+        // type; put the cursor in the body.
+        if startInEditMode || PreferencesManager.shared.noteEditMode == .alwaysEdit {
+            view.window?.makeFirstResponder(textView)
+        }
     }
 
     // MARK: - Title
@@ -392,6 +416,7 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         let body = NoteStore.shared.body(of: note)
         let attributed = MarkdownRenderer.render(body, baseFont: PreferencesManager.shared.editorFont)
         textView.textStorage?.setAttributedString(attributed)
+        noteUndoManager.removeAllActions()
     }
 
     private func editRaw() {
@@ -405,6 +430,7 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         textView.typingAttributes = [.font: font, .foregroundColor: NSColor.labelColor]
         textView.string = NoteStore.shared.body(of: note)
         textView.font = font
+        noteUndoManager.removeAllActions()
     }
 
     /// Re-apply a changed editor font to whichever mode is active.
