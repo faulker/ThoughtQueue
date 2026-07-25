@@ -7,21 +7,26 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00EA001519CA94EDFAFA5DBE /* SettingsSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01EA72EA59E1566CFC3EF594 /* SettingsSyncTests.swift */; };
 		0408415B14778A0261C8CF42 /* OpenWithService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81505E0C24015CF74D55C25E /* OpenWithService.swift */; };
 		0C1E0486A6E092C221D653FE /* PreferencesWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81B6CA33400DD6E1AA4C4C9 /* PreferencesWindowController.swift */; };
 		1DBA35536F2435F0570AB73F /* NoteDetailViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F9C0CA0E946497651E290B1 /* NoteDetailViewControllerTests.swift */; };
 		227CC50DEBC5583B89FC0A65 /* PreferencesManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4ABA939FA382F6AAD18D83 /* PreferencesManagerTests.swift */; };
 		23793BE184543FE6507D167D /* MarkdownRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B88640B5CD4D2E2A11EE4979 /* MarkdownRendererTests.swift */; };
 		23D25801986C49A9ADF44D32 /* PreferencesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B3AEE9D555745E4BBD03DAB /* PreferencesManager.swift */; };
+		411296EA14A6E665018A5D81 /* NoteRowViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D9B4A70970F169DEF6EEC06 /* NoteRowViewTests.swift */; };
 		5061115D8FED3350D0C77278 /* ToastWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1D741EA098FEA403F3A713 /* ToastWindow.swift */; };
 		644BBD5A402C82BEA5090851 /* AutoIntelService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64EBD6B26F170099FE531BC2 /* AutoIntelService.swift */; };
+		69AD78D9A1CD40444A12F222 /* NoteNavigatorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A99BA8996F309A96220BE1AE /* NoteNavigatorViewController.swift */; };
 		6A131A7109C35F764265D72C /* NoteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB32A1974D69C0DA760ADBA3 /* NoteDetailView.swift */; };
 		6AD7BA1B94E698A3CE34720B /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC1A9A03A363DC795C406CA /* AppDelegate.swift */; };
 		797A9CEFA56203D6AC5BBF17 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEC6F736326866EB56B7C5FC /* MainWindowController.swift */; };
+		8D2BBD6C77DD9E6F28991BD4 /* WorkingDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 057863C32CDF732729156F03 /* WorkingDocumentTests.swift */; };
 		914FBC3C964A141C97ABCC43 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528301576346031EC40FA4B9 /* main.swift */; };
 		992471F77F1B4A1C3C0DC162 /* NoteStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2BBABACAEBAC63087F8627 /* NoteStoreTests.swift */; };
 		9A2C154B724623EEDA2EB6CF /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84743BB203834FF8EE6CE272 /* HotkeyManager.swift */; };
 		9E6B4AF4AC89C3159E8AE541 /* FolderWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94836FE437148129DAEB26AC /* FolderWatcher.swift */; };
+		A6B9C714CD946FF9CF30F5D2 /* SettingsSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = E05F515D90AD6F46A3322E16 /* SettingsSync.swift */; };
 		AF99BE4927B8333D4E8E189E /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27EE505AFB918424D6D2695 /* CaptureService.swift */; };
 		B285710C8892ABAF9B8D319B /* SearchAndNamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0127701C5E8C5172D874DB12 /* SearchAndNamingTests.swift */; };
 		B31846DF4826EDB26B1A5133 /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = E581470727BCC584E29154DF /* Note.swift */; };
@@ -29,6 +34,7 @@
 		B3D61CAE4D03ACC45ECCB2DB /* PopoverController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111961E5B4F3737B22DA8447 /* PopoverController.swift */; };
 		B6A1BA8F73ED13D4D7253204 /* NoteWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BFC637B03AD839B31132FBB /* NoteWindowController.swift */; };
 		B8CFE04CFF988023E1194CE2 /* OpenWithTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A7EF92C8ACC9C33D7C5FA64 /* OpenWithTests.swift */; };
+		BDC20703FAD51E3052BE683E /* NoteNavigatorViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14D9CA26C703EF19B2ADB64A /* NoteNavigatorViewControllerTests.swift */; };
 		BE7AE6388A3748922B5B2C6F /* NoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98338EB2FC611F4C84B0975B /* NoteStore.swift */; };
 		C3C4B0875EB65DA61D4C848F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2A50C039EC60D91FBD30BC2E /* Assets.xcassets */; };
 		CE31692FCD718B50313E7292 /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 820DCC5FE0F2B837244A7F30 /* MarkdownRenderer.swift */; };
@@ -51,8 +57,11 @@
 
 /* Begin PBXFileReference section */
 		0127701C5E8C5172D874DB12 /* SearchAndNamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchAndNamingTests.swift; sourceTree = "<group>"; };
+		01EA72EA59E1566CFC3EF594 /* SettingsSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSyncTests.swift; sourceTree = "<group>"; };
+		057863C32CDF732729156F03 /* WorkingDocumentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingDocumentTests.swift; sourceTree = "<group>"; };
 		0A1D741EA098FEA403F3A713 /* ToastWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastWindow.swift; sourceTree = "<group>"; };
 		111961E5B4F3737B22DA8447 /* PopoverController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverController.swift; sourceTree = "<group>"; };
+		14D9CA26C703EF19B2ADB64A /* NoteNavigatorViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteNavigatorViewControllerTests.swift; sourceTree = "<group>"; };
 		2A50C039EC60D91FBD30BC2E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		434A8B44753B2B9E4EAD7759 /* FuzzySearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzySearch.swift; sourceTree = "<group>"; };
 		4BFC637B03AD839B31132FBB /* NoteWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteWindowController.swift; sourceTree = "<group>"; };
@@ -72,13 +81,16 @@
 		94836FE437148129DAEB26AC /* FolderWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderWatcher.swift; sourceTree = "<group>"; };
 		96450E0A3079E1CC546A7295 /* CaptureServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureServiceTests.swift; sourceTree = "<group>"; };
 		98338EB2FC611F4C84B0975B /* NoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStore.swift; sourceTree = "<group>"; };
+		9D9B4A70970F169DEF6EEC06 /* NoteRowViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteRowViewTests.swift; sourceTree = "<group>"; };
 		A27EE505AFB918424D6D2695 /* CaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureService.swift; sourceTree = "<group>"; };
 		A81B6CA33400DD6E1AA4C4C9 /* PreferencesWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesWindowController.swift; sourceTree = "<group>"; };
 		A8673FE14EFCB456AC0B0DD0 /* ReviewToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewToast.swift; sourceTree = "<group>"; };
+		A99BA8996F309A96220BE1AE /* NoteNavigatorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteNavigatorViewController.swift; sourceTree = "<group>"; };
 		B88640B5CD4D2E2A11EE4979 /* MarkdownRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRendererTests.swift; sourceTree = "<group>"; };
 		CB32A1974D69C0DA760ADBA3 /* NoteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteDetailView.swift; sourceTree = "<group>"; };
 		D19EA2444190D4504688A141 /* AutoIntelServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoIntelServiceTests.swift; sourceTree = "<group>"; };
 		DEC6F736326866EB56B7C5FC /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
+		E05F515D90AD6F46A3322E16 /* SettingsSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSync.swift; sourceTree = "<group>"; };
 		E49EC4A3F59C493F7A14ED60 /* ThoughtQueue.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ThoughtQueue.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E581470727BCC584E29154DF /* Note.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Note.swift; sourceTree = "<group>"; };
 		F3D4B4FE21C312B1B882832F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -137,6 +149,7 @@
 				DEC6F736326866EB56B7C5FC /* MainWindowController.swift */,
 				820DCC5FE0F2B837244A7F30 /* MarkdownRenderer.swift */,
 				CB32A1974D69C0DA760ADBA3 /* NoteDetailView.swift */,
+				A99BA8996F309A96220BE1AE /* NoteNavigatorViewController.swift */,
 				F563DDBE690F505C74116C0D /* NoteRowView.swift */,
 				4BFC637B03AD839B31132FBB /* NoteWindowController.swift */,
 				111961E5B4F3737B22DA8447 /* PopoverController.swift */,
@@ -154,11 +167,15 @@
 				96450E0A3079E1CC546A7295 /* CaptureServiceTests.swift */,
 				B88640B5CD4D2E2A11EE4979 /* MarkdownRendererTests.swift */,
 				5F9C0CA0E946497651E290B1 /* NoteDetailViewControllerTests.swift */,
+				14D9CA26C703EF19B2ADB64A /* NoteNavigatorViewControllerTests.swift */,
+				9D9B4A70970F169DEF6EEC06 /* NoteRowViewTests.swift */,
 				6C2BBABACAEBAC63087F8627 /* NoteStoreTests.swift */,
 				71DD76F3016B18C829040316 /* NoteWindowControllerTests.swift */,
 				8A7EF92C8ACC9C33D7C5FA64 /* OpenWithTests.swift */,
 				5C4ABA939FA382F6AAD18D83 /* PreferencesManagerTests.swift */,
 				0127701C5E8C5172D874DB12 /* SearchAndNamingTests.swift */,
+				01EA72EA59E1566CFC3EF594 /* SettingsSyncTests.swift */,
+				057863C32CDF732729156F03 /* WorkingDocumentTests.swift */,
 			);
 			path = ThoughtQueueTests;
 			sourceTree = "<group>";
@@ -171,6 +188,7 @@
 				84743BB203834FF8EE6CE272 /* HotkeyManager.swift */,
 				81505E0C24015CF74D55C25E /* OpenWithService.swift */,
 				7B3AEE9D555745E4BBD03DAB /* PreferencesManager.swift */,
+				E05F515D90AD6F46A3322E16 /* SettingsSync.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -271,6 +289,7 @@
 				CE31692FCD718B50313E7292 /* MarkdownRenderer.swift in Sources */,
 				B31846DF4826EDB26B1A5133 /* Note.swift in Sources */,
 				6A131A7109C35F764265D72C /* NoteDetailView.swift in Sources */,
+				69AD78D9A1CD40444A12F222 /* NoteNavigatorViewController.swift in Sources */,
 				E107522DFE5E5DBF15EE843A /* NoteRowView.swift in Sources */,
 				BE7AE6388A3748922B5B2C6F /* NoteStore.swift in Sources */,
 				B6A1BA8F73ED13D4D7253204 /* NoteWindowController.swift in Sources */,
@@ -279,6 +298,7 @@
 				23D25801986C49A9ADF44D32 /* PreferencesManager.swift in Sources */,
 				0C1E0486A6E092C221D653FE /* PreferencesWindowController.swift in Sources */,
 				B37DC1E25F71066404FD0466 /* ReviewToast.swift in Sources */,
+				A6B9C714CD946FF9CF30F5D2 /* SettingsSync.swift in Sources */,
 				5061115D8FED3350D0C77278 /* ToastWindow.swift in Sources */,
 				914FBC3C964A141C97ABCC43 /* main.swift in Sources */,
 			);
@@ -292,11 +312,15 @@
 				DDA17C113C96444ECC170AF5 /* CaptureServiceTests.swift in Sources */,
 				23793BE184543FE6507D167D /* MarkdownRendererTests.swift in Sources */,
 				1DBA35536F2435F0570AB73F /* NoteDetailViewControllerTests.swift in Sources */,
+				BDC20703FAD51E3052BE683E /* NoteNavigatorViewControllerTests.swift in Sources */,
+				411296EA14A6E665018A5D81 /* NoteRowViewTests.swift in Sources */,
 				992471F77F1B4A1C3C0DC162 /* NoteStoreTests.swift in Sources */,
 				F51668630D36231F526DEA47 /* NoteWindowControllerTests.swift in Sources */,
 				B8CFE04CFF988023E1194CE2 /* OpenWithTests.swift in Sources */,
 				227CC50DEBC5583B89FC0A65 /* PreferencesManagerTests.swift in Sources */,
 				B285710C8892ABAF9B8D319B /* SearchAndNamingTests.swift in Sources */,
+				00EA001519CA94EDFAFA5DBE /* SettingsSyncTests.swift in Sources */,
+				8D2BBD6C77DD9E6F28991BD4 /* WorkingDocumentTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -13,12 +13,14 @@ You're reading something, debugging code, or thinking out loud and want to jot i
 - **Detailed capture** -- a second shortcut opens the note editor pre-filled with the selection so you can adjust it before saving
 - **Add note** -- write a note from scratch via the `+ Add Note` button in the popover or main window
 - **Note editor** -- a single window per note with a view/edit toggle: markdown renders by default, click or start typing to edit the raw text, with autosave and full undo/redo (Cmd+Z / Cmd+Shift+Z)
+- **Navigation panel** -- the note window has a collapsible panel on the left listing every note grouped by category, with a search field. Hidden by default; the sidebar button in the header (or Ctrl+Cmd+S) reveals it, and picking a note switches the window over to it
 - **Copy, don't just open** -- one click to copy a note's full body or its file path straight to the clipboard, right from its row
 - **Run notes anywhere** -- configurable "Open With" destinations: run a shell command against the note's file (open it in an editor, hand it to a CLI tool, whatever `{path}` template you want), or paste it into an app like Claude Desktop. Comes with Claude and Zed presets; add, edit, or remove your own in Preferences
 - **Categories** -- organize notes however you want; create, rename, move between, or delete categories, with folders on disk to match. New categories can also be created inline from any category dropdown
 - **Working document** -- optionally designate one note as the default sink so quick captures append to it instead of creating a new file each time
 - **On-device auto-title & auto-category** -- optional, macOS 26+: suggests a title and category for each capture via Apple's on-device model, with a review toast to accept, tweak, or dismiss
 - **Local, plain-text storage** -- notes are `.md` files in a folder you choose; no database, so they're greppable and easy to sync or back up yourself
+- **Synced settings** -- on by default: your preferences (hotkeys, fonts, Open With actions, and the rest) are mirrored into the store folder, so if that folder is in iCloud/Dropbox they follow you to your other devices. Turn it off in Preferences to keep settings local
 - **Customizable hotkeys** -- change shortcuts in Preferences
 
 ## Requirements
@@ -71,7 +73,7 @@ open build/Build/Products/Release/ThoughtQueue.app
 
 The script auto-detects the first `Developer ID Application` identity in your keychain, extracts your Team ID, signs the app with hardened runtime and a secure timestamp, then runs `codesign --verify` to confirm the signature is valid. If no identity is found, the build fails with a clear error.
 
-The output binary is signed but **not notarized**. For personal use or distribution to users who can right-click → Open, signing is enough. For frictionless distribution, you'll need to notarize separately with `xcrun notarytool` and `xcrun stapler`.
+The output binary is signed but **not notarized**. For personal use or distribution to users who can right-click → Open, signing is enough. For frictionless distribution, notarize it, which is what the [release workflow](#releasing) does for you.
 
 ### Or use Xcode directly
 
@@ -82,6 +84,40 @@ open ThoughtQueue.xcodeproj
 ```
 
 To keep ThoughtQueue available, drag `ThoughtQueue.app` to your Applications folder.
+
+## Releasing
+
+`.github/workflows/release.yml` builds a universal (arm64 + x86_64) app on a macOS runner, runs the test suite, signs and notarizes it when the Apple secrets are present, then publishes a GitHub Release with a `.dmg`, a `.zip`, and `checksums-sha256.txt`.
+
+Two ways to trigger it:
+
+1. **Actions → Release → Run workflow**, pick `patch`, `minor`, or `major`. The workflow bumps `CFBundleShortVersionString` and `CFBundleVersion` in `ThoughtQueue/Info.plist`, commits that, tags it, and releases.
+2. **Push a tag yourself**: `git tag v1.2.0 && git push origin v1.2.0`. The version comes from the tag and no commit is made.
+
+### Repository secrets
+
+All of these are optional. With none of them set you still get a release, just ad-hoc signed (users have to right-click > Open, and the release notes say so).
+
+| Secret | Purpose |
+| --- | --- |
+| `MACOS_CERTIFICATE` | Developer ID Application certificate as a base64-encoded `.p12` |
+| `MACOS_CERTIFICATE_PASSWORD` | Password used when exporting that `.p12` |
+| `APPLE_TEAM_ID` | 10-character Apple Developer Team ID |
+| `APPLE_ID` | Apple ID email, enables notarization |
+| `APPLE_APP_PASSWORD` | [App-specific password](https://support.apple.com/en-us/102654) for that Apple ID |
+| `RELEASE_PAT` | Only needed if branch protection blocks the default token from pushing the version-bump commit |
+
+Signing needs `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PASSWORD`, and `APPLE_TEAM_ID`. Notarization additionally needs `APPLE_ID` and `APPLE_APP_PASSWORD`.
+
+To export the certificate: Keychain Access, right-click your `Developer ID Application` identity, **Export** as `.p12`, then
+
+```bash
+base64 -i Certificates.p12 | pbcopy
+```
+
+and paste that into the `MACOS_CERTIFICATE` secret.
+
+The manual run also has a **Skip the test suite** checkbox for the case where CI tests are broken but you need to ship. It applies to that one run only; tag pushes always run the tests.
 
 ## Setup
 
@@ -101,6 +137,7 @@ Select text in any app, hit the shortcut, and keep working. A toast confirms the
 ### Manage your notes
 
 - **Left-click** the menu bar icon to open a popover with a searchable notes list and quick actions on each row (Open with, Move to category, Copy note, Copy path, Delete)
+- **Double-click** the menu bar icon to open your working document. Set one first by right-clicking a note in the full management window and picking **Set as Working Document**
 - **Right-click** the menu bar icon for the full management window, preferences, or to quit
 
 ### Copy a note
@@ -127,6 +164,10 @@ Create categories from the sidebar in the full management window. To move a note
 ### Change hotkeys
 
 Right-click the menu bar icon > **Preferences**. Click a shortcut field and press your desired key combination.
+
+### Sync settings across devices
+
+Settings sync is on by default. ThoughtQueue mirrors your syncable preferences into a hidden `.thoughtqueue/settings.plist` file inside the store folder, so if that folder lives in iCloud, Dropbox, or similar, your other Macs pointed at the same folder pick up the changes (last write wins). Device-local values (the store folder location itself and the working-document path) are never synced. Toggle it off under **Preferences > Sync settings via store folder** to keep settings on this Mac only.
 
 ## How it works
 

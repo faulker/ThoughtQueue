@@ -39,6 +39,17 @@ final class NoteStore {
 
     private init() {}
 
+    // MARK: - Working document
+
+    /// The note designated as the working document, or nil when none is set, the store root
+    /// is unknown, or the file no longer exists (deleted/moved outside the app).
+    var workingDocumentNote: Note? {
+        guard let url = PreferencesManager.shared.workingDocumentURL,
+              fm.fileExists(atPath: url.path),
+              let root = rootURL else { return nil }
+        return Note.from(url: url, storeRoot: root)
+    }
+
     // MARK: - Self-write suppression
 
     /// Record that the app is about to write `url`, so the watcher can ignore the resulting event.

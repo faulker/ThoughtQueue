@@ -58,10 +58,8 @@ final class CaptureService {
         }
 
         // Append to the working document if one is set and still exists (rule #6).
-        if let workingURL = prefs.workingDocumentURL {
-            if FileManager.default.fileExists(atPath: workingURL.path),
-               let root = store.rootURL,
-               let note = Note.from(url: workingURL, storeRoot: root),
+        if prefs.workingDocumentURL != nil {
+            if let note = store.workingDocumentNote,
                store.append(to: note, text: text) {
                 ToastWindow.show(message: "Appended to \(note.title)")
                 return .appended(note.title)
@@ -89,12 +87,7 @@ final class CaptureService {
     /// The category to use for a brand-new capture: the working document's folder if set,
     /// otherwise nil (Uncategorized).
     private func defaultCategoryFromWorkingDoc() -> String? {
-        guard let workingURL = PreferencesManager.shared.workingDocumentURL,
-              let root = NoteStore.shared.rootURL,
-              let note = Note.from(url: workingURL, storeRoot: root) else {
-            return nil
-        }
-        return note.category
+        NoteStore.shared.workingDocumentNote?.category
     }
 
     // MARK: - Selection grab (simulate Cmd+C, poll/restore pasteboard)

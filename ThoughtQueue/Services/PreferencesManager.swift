@@ -13,6 +13,11 @@ struct KeyBinding {
 extension Notification.Name {
     /// Posted when the note editor font changes, so open views can re-render.
     static let editorFontDidChange = Notification.Name("editorFontDidChange")
+    /// Posted when the "keep notes on top" preference changes, so open note windows
+    /// can update their window level immediately.
+    static let noteAlwaysOnTopDidChange = Notification.Name("noteAlwaysOnTopDidChange")
+    /// Posted when the settings-sync toggle flips, so the sync mirror can start or stop.
+    static let syncSettingsEnabledDidChange = Notification.Name("syncSettingsEnabledDidChange")
 }
 
 /// How clicking a note in the UI behaves.
@@ -50,9 +55,41 @@ final class PreferencesManager {
         static let autoIntelEnabled = "autoIntelEnabled"
         static let editorFontName = "editorFontName"
         static let editorFontSize = "editorFontSize"
+        static let noteAlwaysOnTop = "noteAlwaysOnTop"
+        static let noteWindowWidth = "noteWindowWidth"
+        static let noteWindowHeight = "noteWindowHeight"
+        static let noteNavigatorWidth = "noteNavigatorWidth"
+        static let syncSettings = "syncSettingsEnabled"
     }
 
     private init() {}
+
+    // MARK: - Settings sync
+
+    /// Keys that are safe to mirror into the store folder for cross-device sync.
+    /// Deliberately a whitelist: device-local values (the store bookmark/path, the working
+    /// document's absolute path, and the sync toggle itself) are never included, so they can
+    /// never leak between machines even if the synced file is edited by hand.
+    static let syncableKeys: [String] = [
+        Keys.quickCaptureKeyCode, Keys.quickCaptureModifiers,
+        Keys.detailedCaptureKeyCode, Keys.detailedCaptureModifiers,
+        Keys.clickBehavior, Keys.noteEditMode,
+        Keys.toastTimeout, Keys.openWithActions, Keys.autoIntelEnabled,
+        Keys.editorFontName, Keys.editorFontSize,
+        Keys.noteAlwaysOnTop, Keys.noteWindowWidth, Keys.noteWindowHeight,
+        Keys.noteNavigatorWidth,
+    ]
+
+    /// Whether syncable settings are mirrored into the store folder so other devices pointed at
+    /// the same (cloud-synced) folder pick them up. On by default; when off, settings stay in
+    /// local UserDefaults only. The flag itself is always local and never synced.
+    var syncSettingsEnabled: Bool {
+        get { defaults.object(forKey: Keys.syncSettings) == nil ? true : defaults.bool(forKey: Keys.syncSettings) }
+        set {
+            defaults.set(newValue, forKey: Keys.syncSettings)
+            NotificationCenter.default.post(name: .syncSettingsEnabledDidChange, object: nil)
+        }
+    }
 
     // MARK: - Hotkeys
 
@@ -180,6 +217,55 @@ final class PreferencesManager {
             return v > 0 ? v : 8.0
         }
         set { defaults.set(newValue, forKey: Keys.toastTimeout) }
+    }
+
+    // MARK: - Notes always on top
+
+    /// When true, note windows float above other apps' windows (NSWindow.level = .floating).
+    /// Off by default. Changing it posts `.noteAlwaysOnTopDidChange` so open windows update live.
+    var noteAlwaysOnTop: Bool {
+        get { defaults.bool(forKey: Keys.noteAlwaysOnTop) }
+        set {
+            defaults.set(newValue, forKey: Keys.noteAlwaysOnTop)
+            NotificationCenter.default.post(name: .noteAlwaysOnTopDidChange, object: nil)
+        }
+    }
+
+    // MARK: - Note window size
+
+    /// The default note window size, used until the user resizes a note window.
+    static let defaultNoteWindowSize = NSSize(width: 460, height: 520)
+
+    /// The last size the user resized a note window to, remembered so every subsequently
+    /// opened note window uses it. Falls back to `defaultNoteWindowSize` when unset.
+    var noteWindowSize: NSSize {
+        get {
+            let width = defaults.double(forKey: Keys.noteWindowWidth)
+            let height = defaults.double(forKey: Keys.noteWindowHeight)
+            guard width > 0, height > 0 else { return Self.defaultNoteWindowSize }
+            return NSSize(width: width, height: height)
+        }
+        set {
+            defaults.set(Double(newValue.width), forKey: Keys.noteWindowWidth)
+            defaults.set(Double(newValue.height), forKey: Keys.noteWindowHeight)
+        }
+    }
+
+    // MARK: - Note navigator width
+
+    /// The default width of the note window's navigation panel.
+    static let defaultNoteNavigatorWidth: CGFloat = 200
+
+    /// The width of the note window's navigation panel, remembered when the user drags the
+    /// divider. Clamped to the split view item's allowed thickness range. The panel's
+    /// visibility is deliberately not persisted: it always starts hidden.
+    var noteNavigatorWidth: CGFloat {
+        get {
+            let width = defaults.double(forKey: Keys.noteNavigatorWidth)
+            guard width > 0 else { return Self.defaultNoteNavigatorWidth }
+            return min(max(CGFloat(width), 160), 320)
+        }
+        set { defaults.set(Double(min(max(newValue, 160), 320)), forKey: Keys.noteNavigatorWidth) }
     }
 
     // MARK: - Auto-intel toggle

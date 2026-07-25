@@ -27,6 +27,11 @@ final class PopoverController: NSObject, NSPopoverDelegate {
         }
     }
 
+    /// Dismiss the popover if it is showing. No-op otherwise.
+    func close() {
+        popover.close()
+    }
+
     private func startEventMonitors() {
         if globalMonitor == nil {
             globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in

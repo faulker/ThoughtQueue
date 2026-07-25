@@ -1,0 +1,335 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      skip_tests:
+        description: "Skip the test suite (use only if CI tests are broken)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  # Only runs for manual dispatch: bumps Info.plist, commits it, and pushes the tag.
+  # Tag pushes skip this job and use the pushed tag directly.
+  resolve-version:
+    name: Resolve Version
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    outputs:
+      new_tag: ${{ steps.bump.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Calculate next version
+        id: bump
+        env:
+          BUMP_TYPE: ${{ github.event.inputs.bump }}
+        run: |
+          LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.0.0"
+          fi
+
+          VERSION="${LATEST_TAG#v}"
+          # Strip any pre-release or build metadata (e.g. 1.2.3-alpha.1+build)
+          VERSION="${VERSION%%-*}"
+          VERSION="${VERSION%%+*}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          MAJOR="${MAJOR:-0}"; MINOR="${MINOR:-0}"; PATCH="${PATCH:-0}"
+
+          case "$BUMP_TYPE" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+          echo "Bumping $LATEST_TAG -> $NEW_TAG ($BUMP_TYPE)"
+
+      - name: Commit version bump
+        env:
+          NEW_TAG: ${{ steps.bump.outputs.new_tag }}
+        run: |
+          set -e
+          VERSION="${NEW_TAG#v}"
+          PLIST=ThoughtQueue/Info.plist
+
+          # Replace the <string> on the line following each version key.
+          sed -i -E "/<key>CFBundleShortVersionString<\/key>/{n;s|<string>.*</string>|<string>${VERSION}</string>|;}" "$PLIST"
+          sed -i -E "/<key>CFBundleVersion<\/key>/{n;s|<string>.*</string>|<string>${VERSION}</string>|;}" "$PLIST"
+
+          grep -A1 -E 'CFBundleShortVersionString|CFBundleVersion' "$PLIST"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$PLIST"
+          git commit -m "chore: bump version to ${VERSION}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Create and push tag
+        env:
+          NEW_TAG: ${{ steps.bump.outputs.new_tag }}
+        run: |
+          set -e
+          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
+            echo "Tag $NEW_TAG already exists, skipping creation"
+            exit 0
+          fi
+          git tag "$NEW_TAG"
+          git push origin "$NEW_TAG"
+
+  release:
+    name: Build & Release
+    runs-on: macos-latest
+    needs: [resolve-version]
+    if: always() && (needs.resolve-version.result == 'success' || needs.resolve-version.result == 'skipped')
+    env:
+      RELEASE_TAG: ${{ needs.resolve-version.outputs.new_tag || github.ref_name }}
+      BUILD_DIR: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-version.outputs.new_tag || github.ref_name }}
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Set version from tag
+        run: |
+          set -e
+          VERSION="${RELEASE_TAG#v}"
+          PLIST=ThoughtQueue/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "$PLIST"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Run tests
+        if: ${{ github.event.inputs.skip_tests != 'true' }}
+        run: |
+          set -o pipefail
+          xcodebuild -project ThoughtQueue.xcodeproj \
+            -scheme ThoughtQueueTests \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath build-test \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_REQUIRED=NO \
+            test | tail -40
+
+      # Signing and notarization are optional: without the Apple secrets the app is
+      # ad-hoc signed instead, and the release notes say so.
+      - name: Configure code signing
+        id: signing
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -e
+          if [ -z "$MACOS_CERTIFICATE" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            echo "No MACOS_CERTIFICATE / APPLE_TEAM_ID secret, building ad-hoc signed."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "notarize=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" \
+            -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$RUNNER_TEMP/certificate.p12"
+
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+          IDENTITY_LINE="$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | head -1)"
+          if [ -z "$IDENTITY_LINE" ]; then
+            echo "ERROR: imported certificate has no 'Developer ID Application' identity."
+            security find-identity -v -p codesigning "$KEYCHAIN"
+            exit 1
+          fi
+          IDENTITY="$(sed -E 's/.*"(Developer ID Application: [^"]+)".*/\1/' <<< "$IDENTITY_LINE")"
+          echo "Signing identity: $IDENTITY"
+
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "identity=$IDENTITY" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_PASSWORD" ]; then
+            echo "notarize=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No APPLE_ID / APPLE_APP_PASSWORD secret, skipping notarization."
+            echo "notarize=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build universal app
+        env:
+          SIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -eo pipefail
+          ARGS=(
+            ARCHS="arm64 x86_64"
+            ONLY_ACTIVE_ARCH=NO
+          )
+          if [ -n "$SIGN_IDENTITY" ]; then
+            ARGS+=(
+              CODE_SIGN_STYLE=Manual
+              CODE_SIGN_IDENTITY="$SIGN_IDENTITY"
+              DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+              ENABLE_HARDENED_RUNTIME=YES
+              OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime"
+            )
+          else
+            ARGS+=(CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO)
+          fi
+
+          xcodebuild -project ThoughtQueue.xcodeproj \
+            -scheme ThoughtQueue \
+            -configuration Release \
+            -derivedDataPath "$BUILD_DIR" \
+            "${ARGS[@]}" \
+            build | tail -20
+
+          APP_PATH="$BUILD_DIR/Build/Products/Release/ThoughtQueue.app"
+          test -f "$APP_PATH/Contents/MacOS/ThoughtQueue"
+          lipo -info "$APP_PATH/Contents/MacOS/ThoughtQueue"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+
+      - name: Notarize app
+        if: ${{ steps.signing.outputs.notarize == 'true' }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -e
+          # notarytool takes a zip; the ticket is then stapled to the .app itself.
+          ditto -c -k --keepParent "$APP_PATH" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$APP_PATH"
+          spctl --assess --type execute --verbose=2 "$APP_PATH"
+
+      - name: Package DMG and zip
+        env:
+          SIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+        run: |
+          set -e
+          mkdir -p dist "$RUNNER_TEMP/dmg"
+          cp -R "$APP_PATH" "$RUNNER_TEMP/dmg/"
+          ln -s /Applications "$RUNNER_TEMP/dmg/Applications"
+
+          DMG="dist/ThoughtQueue-${VERSION}.dmg"
+          hdiutil create -volname "ThoughtQueue ${VERSION}" \
+            -srcfolder "$RUNNER_TEMP/dmg" \
+            -ov -format UDZO "$DMG"
+
+          if [ -n "$SIGN_IDENTITY" ]; then
+            codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG"
+          fi
+
+          ditto -c -k --keepParent "$APP_PATH" "dist/ThoughtQueue-${VERSION}.zip"
+          ls -lh dist
+
+      - name: Notarize DMG
+        if: ${{ steps.signing.outputs.notarize == 'true' }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -e
+          DMG="dist/ThoughtQueue-${VERSION}.dmg"
+          xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$DMG"
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          shasum -a 256 ./* > "checksums-sha256.txt"
+          cat checksums-sha256.txt
+
+      - name: Compose release notes header
+        env:
+          NOTARIZED: ${{ steps.signing.outputs.notarize }}
+        run: |
+          {
+            echo "**ThoughtQueue ${VERSION}** for macOS 14+ (universal: Apple Silicon + Intel)."
+            echo
+            echo "Install: open the DMG and drag ThoughtQueue to Applications, then grant Accessibility permission in System Settings > Privacy & Security > Accessibility."
+            if [ "$NOTARIZED" != "true" ]; then
+              echo
+              echo "> This build is not notarized. macOS will block it on first launch: right-click the app and choose Open, or run \`xattr -dr com.apple.quarantine /Applications/ThoughtQueue.app\`."
+            fi
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ThoughtQueue ${{ env.VERSION }}
+          body_path: release-notes.md
+          generate_release_notes: true
+          files: |
+            dist/*
+
+      - name: Clean up keychain
+        if: always()
+        run: |
+          security list-keychains -d user -s login.keychain-db || true
+          security delete-keychain "$RUNNER_TEMP/build.keychain-db" 2>/dev/null || true

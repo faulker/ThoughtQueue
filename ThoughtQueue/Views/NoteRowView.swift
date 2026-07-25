@@ -47,7 +47,7 @@ final class NoteRowView: NSView {
 
         let actions = NSStackView(views: [openBtn, categoryBtn, copyNoteBtn, copyPathBtn, deleteBtn])
         actions.orientation = .horizontal
-        actions.spacing = 6
+        actions.spacing = 2
         actions.translatesAutoresizingMaskIntoConstraints = false
         actions.alphaValue = 0 // revealed on hover
         actionsStack = actions
@@ -99,13 +99,22 @@ final class NoteRowView: NSView {
             : NSColor.clear.cgColor
     }
 
+    /// Build an action button whose clickable area is a padded 28×28 box centered on the icon,
+    /// not just the glyph itself. The extra padding means a click landing a few pixels off the
+    /// icon still triggers the button instead of falling through to the row's open action.
     private func makeIconButton(_ symbol: String, tip: String, action: Selector) -> NSButton {
         let btn = NSButton(title: "", target: self, action: action)
         btn.image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
         btn.imagePosition = .imageOnly
+        btn.imageScaling = .scaleProportionallyDown
         btn.bezelStyle = .inline
         btn.isBordered = false
         btn.toolTip = tip
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            btn.widthAnchor.constraint(equalToConstant: 28),
+            btn.heightAnchor.constraint(equalToConstant: 28),
+        ])
         return btn
     }
 

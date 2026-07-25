@@ -79,6 +79,12 @@ final class NoteDetailViewController: NSViewController, NSTextViewDelegate, NSTe
         textView.onActivateEditing = { [weak self] in self?.beginEditing() }
         textView.font = PreferencesManager.shared.editorFont
         textView.isRichText = false
+        // Keep pasted/typed text verbatim: no curly quotes, em dashes, or text
+        // replacements that break when the note is later pasted into a terminal.
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.smartInsertDeleteEnabled = false
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.textContainerInset = NSSize(width: 6, height: 6)

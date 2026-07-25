@@ -22,12 +22,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusItem()
 
         // Configure the store: use the saved folder, or prompt the user on first run.
+        // Both paths run synchronously, so the store root is set by the time we return.
         if let url = PreferencesManager.shared.storeURL {
             NoteStore.shared.rootURL = url
             startWatcher()
         } else {
             promptForStoreFolder()
         }
+
+        // Mirror settings into the store folder (default on) once the root is known.
+        SettingsSync.shared.start()
 
         // Accessibility permission for hotkeys + keyboard simulation.
         if !AXIsProcessTrusted() {
@@ -163,6 +167,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
 
+        let viewMenuItem = NSMenuItem()
+        let viewMenu = NSMenu(title: "View")
+        // Nil target: the action is dispatched down the responder chain, so it reaches the note
+        // window that's key (and is disabled automatically when no note window is).
+        let navigatorItem = NSMenuItem(title: "Show Notes Panel", action: Selector(("toggleNoteNavigator:")), keyEquivalent: "s")
+        navigatorItem.keyEquivalentModifierMask = [.control, .command]
+        navigatorItem.target = nil
+        viewMenu.addItem(navigatorItem)
+        viewMenuItem.submenu = viewMenu
+        mainMenu.addItem(viewMenuItem)
+
         NSApp.mainMenu = mainMenu
     }
 
@@ -200,12 +215,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return image
     }
 
+    /// What a click on the menu bar icon should do.
+    enum StatusItemAction: Equatable {
+        case contextMenu
+        case workingDocument
+        case popover
+    }
+
+    /// Route a menu bar click by event type and click count. Pure so the routing is testable
+    /// without synthesizing NSEvents.
+    ///
+    /// The single-click action is deliberately not deferred waiting on a possible second click:
+    /// that would add `NSEvent.doubleClickInterval` of lag to every popover open. Instead the
+    /// first click of a double opens the popover as usual and the second click dismisses it.
+    static func statusItemAction(eventType: NSEvent.EventType, clickCount: Int) -> StatusItemAction {
+        if eventType == .rightMouseUp { return .contextMenu }
+        return clickCount >= 2 ? .workingDocument : .popover
+    }
+
     @objc private func handleClick(_ sender: NSStatusBarButton) {
         guard let event = NSApp.currentEvent else { return }
-        if event.type == .rightMouseUp {
+        switch Self.statusItemAction(eventType: event.type, clickCount: event.clickCount) {
+        case .contextMenu:
             showContextMenu()
-        } else {
+        case .workingDocument:
+            popoverController.close()
+            openWorkingDocument()
+        case .popover:
             popoverController.toggle(relativeTo: sender.bounds, of: sender)
+        }
+    }
+
+    /// Open a window on the note set as the working document. Clears the preference when it
+    /// points at a note that no longer exists, matching quick capture's stale-path handling.
+    func openWorkingDocument() {
+        if let note = NoteStore.shared.workingDocumentNote {
+            NoteWindowController.show(note: note)
+            return
+        }
+        if PreferencesManager.shared.workingDocumentURL != nil {
+            PreferencesManager.shared.workingDocumentURL = nil
+            log.warning("Working document missing; cleared setting")
+            ToastWindow.show(message: "Working document is missing")
+        } else {
+            ToastWindow.show(message: "No working document set")
         }
     }
 

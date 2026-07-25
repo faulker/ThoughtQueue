@@ -18,6 +18,8 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     private let detailedRecorder = ShortcutRecorderView()
     private let startAtLoginCheckbox = NSButton(checkboxWithTitle: "Start ThoughtQueue at login", target: nil, action: nil)
     private let autoIntelCheckbox = NSButton(checkboxWithTitle: "Auto title & categorize (on-device)", target: nil, action: nil)
+    private let alwaysOnTopCheckbox = NSButton(checkboxWithTitle: "Keep note windows on top of other windows", target: nil, action: nil)
+    private let syncSettingsCheckbox = NSButton(checkboxWithTitle: "Sync settings via store folder (across devices)", target: nil, action: nil)
     private let storePathLabel = NSTextField(labelWithString: "")
     private let clickBehaviorPopup = NSPopUpButton()
     private let noteEditModePopup = NSPopUpButton()
@@ -150,6 +152,16 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         autoIntelCheckbox.action = #selector(autoIntelToggled)
         stack.addArrangedSubview(autoIntelCheckbox)
 
+        alwaysOnTopCheckbox.state = PreferencesManager.shared.noteAlwaysOnTop ? .on : .off
+        alwaysOnTopCheckbox.target = self
+        alwaysOnTopCheckbox.action = #selector(alwaysOnTopToggled)
+        stack.addArrangedSubview(alwaysOnTopCheckbox)
+
+        syncSettingsCheckbox.state = PreferencesManager.shared.syncSettingsEnabled ? .on : .off
+        syncSettingsCheckbox.target = self
+        syncSettingsCheckbox.action = #selector(syncSettingsToggled)
+        stack.addArrangedSubview(syncSettingsCheckbox)
+
         startAtLoginCheckbox.state = PreferencesManager.shared.startAtLogin ? .on : .off
         startAtLoginCheckbox.target = self
         startAtLoginCheckbox.action = #selector(startAtLoginToggled)
@@ -209,6 +221,8 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
             NoteStore.shared.rootURL = url
             storePathLabel.stringValue = url.path
             (NSApp.delegate as? AppDelegate)?.restartWatcher()
+            // Pull settings from (or seed them into) the newly chosen folder.
+            SettingsSync.shared.start()
             NotificationCenter.default.post(name: .notesDidChange, object: nil)
         }
     }
@@ -272,6 +286,15 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
 
     @objc private func startAtLoginToggled(_ sender: NSButton) {
         PreferencesManager.shared.startAtLogin = sender.state == .on
+    }
+
+    @objc private func alwaysOnTopToggled(_ sender: NSButton) {
+        PreferencesManager.shared.noteAlwaysOnTop = sender.state == .on
+    }
+
+    @objc private func syncSettingsToggled(_ sender: NSButton) {
+        PreferencesManager.shared.syncSettingsEnabled = sender.state == .on
+        SettingsSync.shared.syncEnabledChanged()
     }
 
     @objc private func resetOpenWith() {
