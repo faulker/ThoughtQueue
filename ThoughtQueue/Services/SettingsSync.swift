@@ -149,6 +149,9 @@ final class SettingsSync {
         if changed.contains(SyncKeys.noteAlwaysOnTop) {
             nc.post(name: .noteAlwaysOnTopDidChange, object: nil)
         }
+        if changed.contains(SyncKeys.autoUpdateCheckEnabled) || changed.contains(SyncKeys.updateCheckIntervalHours) {
+            nc.post(name: .updateCheckSettingsDidChange, object: nil)
+        }
         nc.post(name: .syncedSettingsDidImport, object: nil)
     }
 
@@ -160,6 +163,8 @@ final class SettingsSync {
         static let editorFontName = "editorFontName"
         static let editorFontSize = "editorFontSize"
         static let noteAlwaysOnTop = "noteAlwaysOnTop"
+        static let autoUpdateCheckEnabled = "autoUpdateCheckEnabled"
+        static let updateCheckIntervalHours = "updateCheckIntervalHours"
     }
 
     /// The set of syncable keys whose value differs between two snapshots. A key present in only

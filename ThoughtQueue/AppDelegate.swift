@@ -47,6 +47,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager = hk
 
         observeWindowVisibility()
+
+        // Arm the periodic check, then check once at launch. The delay keeps the network call
+        // off the startup path so a slow or offline connection can't stall the menu bar icon.
+        UpdateService.shared.startScheduler()
+        if PreferencesManager.shared.autoUpdateCheckEnabled {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                UpdateService.shared.check(userInitiated: false)
+            }
+        }
     }
 
     // MARK: - Activation policy

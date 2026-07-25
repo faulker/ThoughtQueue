@@ -36,7 +36,7 @@ Releases are built by `.github/workflows/release.yml` (tag push `v*` or manual r
 
 ### Key patterns
 
-- **Singletons** for all services: `DatabaseManager.shared`, `CaptureService.shared`, `ClaudeIntegration.shared`, `PreferencesManager.shared`
+- **Singletons** for all services: `DatabaseManager.shared`, `CaptureService.shared`, `ClaudeIntegration.shared`, `PreferencesManager.shared`, `UpdateService.shared`
 - **NotificationCenter** with `.entriesDidChange` for UI synchronization across all views
 - **Raw SQLite3 C API** (no ORM), database at `~/Library/Application Support/ThoughtQueue/thoughtqueue.db`
 - **CGEvent** for both hotkey capture and keyboard simulation, requires Accessibility permission, app is non-sandboxed
@@ -49,6 +49,10 @@ Releases are built by `.github/workflows/release.yml` (tag push `v*` or manual r
 - **MainWindowController**: NSSplitViewController with category sidebar + entries table + "Clear Completed"
 - **NoteWindowController**: The single note window for creating, viewing, and editing a note (inline editable title + category dropdown, view/edit toggle). Used by "+ Add Note" and detailed capture alike. Its content is an `NSSplitViewController`: `NoteNavigatorViewController` in a collapsible sidebar item (hidden by default, toggled from the header or Ctrl+Cmd+S) plus `NoteEditorViewController`. Reach the editor from a window via `NSWindow.noteEditor`.
 - **NoteNavigatorViewController**: The note window's navigation panel. Source-list outline of notes grouped by category with a fuzzy search field; selecting a note retargets the same window via `NoteEditorViewController.load(note:)`, unless that note already has its own window (which is fronted instead).
+
+### Auto-update
+
+`UpdateService` checks GitHub Releases at launch and on a preference-controlled interval. The check is a `HEAD` against the public `releases/latest` URL whose 302 redirect carries the version tag: deliberately **not** the GitHub API, so there is no auth or rate limit. Updating downloads the release zip, verifies it against the release's `checksums-sha256.txt` asset, validates the unpacked bundle's id and version, then hands the swap to a detached shell script that waits for the app to exit before replacing it and relaunching. Version math and checksum parsing are pure statics so they are testable without the network.
 
 ### Default hotkeys
 

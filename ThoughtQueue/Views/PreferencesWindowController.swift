@@ -10,7 +10,7 @@ private final class ActionTrampoline: NSObject {
 }
 
 /// Settings: store-location chooser, working document, click behavior, open-with editor,
-/// hotkeys, toast timeout, auto-intel toggle, start-at-login.
+/// hotkeys, toast timeout, auto-intel toggle, update checks, start-at-login.
 final class PreferencesWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
     static let shared = PreferencesWindowController()
 
@@ -26,17 +26,27 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     private let editorFontLabel = NSTextField(labelWithString: "")
     private let timeoutField = NSTextField()
     private let openWithTable = NSTableView()
+    private let updateVersionLabel = NSTextField(labelWithString: "")
+    private let updateStatusLabel = NSTextField(labelWithString: "")
+    private let checkNowButton = NSButton(title: "Check Now", target: nil, action: nil)
+    private let autoUpdateCheckbox = NSButton(checkboxWithTitle: "Automatically check for updates", target: nil, action: nil)
+    private let updateIntervalPopup = NSPopUpButton()
 
     private var openWithActions: [OpenWithAction] = []
 
+    /// The window opens at this size. The sections total more than this, so the content scrolls
+    /// rather than the window growing tall enough to run off a small display.
+    static let contentSize = NSSize(width: 520, height: 640)
+
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 620),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(origin: .zero, size: PreferencesWindowController.contentSize),
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "ThoughtQueue Preferences"
+        window.minSize = NSSize(width: 520, height: 400)
         window.center()
         self.init(window: window)
         openWithActions = PreferencesManager.shared.openWithActions
@@ -46,17 +56,44 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     private func setupUI() {
         guard let content = window?.contentView else { return }
 
+        // The sections total more than fits in a comfortably sized window, so everything lives in
+        // a scroll view. Without it the bottom controls would be unreachable on a short display.
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = false
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(scroll)
+        NSLayoutConstraint.activate([
+            scroll.topAnchor.constraint(equalTo: content.topAnchor),
+            scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+        ])
+
+        // FlippedView (from PopoverController) gives top-left origin, so the sections stack down
+        // from the top instead of AppKit's default bottom-up document coordinates.
+        let documentView = FlippedView()
+        documentView.translatesAutoresizingMaskIntoConstraints = false
+        scroll.documentView = documentView
+        NSLayoutConstraint.activate([
+            documentView.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
+            documentView.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
+            documentView.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
+        ])
+
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(stack)
+        documentView.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
-            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -20),
+            stack.topAnchor.constraint(equalTo: documentView.topAnchor, constant: 20),
+            stack.leadingAnchor.constraint(equalTo: documentView.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: documentView.trailingAnchor, constant: -20),
+            // Drives the document view's height, which is what makes the scroll view scroll.
+            stack.bottomAnchor.constraint(equalTo: documentView.bottomAnchor, constant: -20),
         ])
 
         // Store location
@@ -146,6 +183,37 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         resetOWBtn.bezelStyle = .rounded
         stack.addArrangedSubview(row([addOWBtn, editOWBtn, deleteOWBtn, resetOWBtn]))
 
+        // Updates
+        stack.addArrangedSubview(sectionLabel("Updates"))
+        updateVersionLabel.stringValue = "ThoughtQueue \(UpdateService.currentVersion())"
+        updateVersionLabel.font = .systemFont(ofSize: 12)
+        updateVersionLabel.textColor = .secondaryLabelColor
+        checkNowButton.bezelStyle = .rounded
+        checkNowButton.target = self
+        checkNowButton.action = #selector(checkNow)
+        stack.addArrangedSubview(row([updateVersionLabel, checkNowButton]))
+
+        updateStatusLabel.font = .systemFont(ofSize: 12)
+        updateStatusLabel.textColor = .secondaryLabelColor
+        updateStatusLabel.lineBreakMode = .byTruncatingTail
+        // A network error message can be arbitrarily long; truncate rather than stretch the
+        // fixed-width window.
+        updateStatusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        updateStatusLabel.stringValue = Self.lastCheckedText(PreferencesManager.shared.lastUpdateCheckAt)
+        stack.addArrangedSubview(updateStatusLabel)
+
+        autoUpdateCheckbox.state = PreferencesManager.shared.autoUpdateCheckEnabled ? .on : .off
+        autoUpdateCheckbox.target = self
+        autoUpdateCheckbox.action = #selector(autoUpdateToggled)
+        stack.addArrangedSubview(autoUpdateCheckbox)
+
+        updateIntervalPopup.addItems(withTitles: UpdateService.intervalChoices.map(\.title))
+        updateIntervalPopup.target = self
+        updateIntervalPopup.action = #selector(updateIntervalChanged)
+        selectUpdateInterval()
+        updateIntervalPopup.isEnabled = PreferencesManager.shared.autoUpdateCheckEnabled
+        stack.addArrangedSubview(row([fixedLabel("Check", 50), updateIntervalPopup]))
+
         // Toggles
         autoIntelCheckbox.state = PreferencesManager.shared.autoIntelEnabled ? .on : .off
         autoIntelCheckbox.target = self
@@ -189,6 +257,21 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         s.orientation = .horizontal
         s.spacing = 8
         return s
+    }
+
+    /// The status line under the version, e.g. "Last checked 8:27 AM" or "Never checked".
+    static func lastCheckedText(_ date: Date?) -> String {
+        guard let date = date else { return "Never checked" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = Calendar.current.isDateInToday(date) ? .none : .short
+        formatter.timeStyle = .short
+        return "Last checked \(formatter.string(from: date))"
+    }
+
+    private func selectUpdateInterval() {
+        let hours = PreferencesManager.shared.updateCheckIntervalHours
+        let index = UpdateService.intervalChoices.firstIndex { $0.hours == hours } ?? 2
+        updateIntervalPopup.selectItem(at: index)
     }
 
     private func selectClickBehavior() {
@@ -295,6 +378,37 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     @objc private func syncSettingsToggled(_ sender: NSButton) {
         PreferencesManager.shared.syncSettingsEnabled = sender.state == .on
         SettingsSync.shared.syncEnabledChanged()
+    }
+
+    @objc private func autoUpdateToggled(_ sender: NSButton) {
+        PreferencesManager.shared.autoUpdateCheckEnabled = sender.state == .on
+        updateIntervalPopup.isEnabled = sender.state == .on
+    }
+
+    @objc private func updateIntervalChanged(_ sender: NSPopUpButton) {
+        let index = sender.indexOfSelectedItem
+        guard index >= 0, index < UpdateService.intervalChoices.count else { return }
+        PreferencesManager.shared.updateCheckIntervalHours = UpdateService.intervalChoices[index].hours
+    }
+
+    /// The update prompt itself is shown by `UpdateService`; this only reports the outcome
+    /// inline so a "you're up to date" result doesn't need a second dialog to dismiss.
+    @objc private func checkNow() {
+        checkNowButton.isEnabled = false
+        updateStatusLabel.stringValue = "Checking\u{2026}"
+        UpdateService.shared.check(userInitiated: true) { [weak self] result in
+            guard let self = self else { return }
+            self.checkNowButton.isEnabled = true
+            switch result {
+            case .success(let release?):
+                self.updateStatusLabel.stringValue = "Update available: \(release.version)"
+            case .success(nil):
+                self.updateStatusLabel.stringValue = "Up to date. "
+                    + Self.lastCheckedText(PreferencesManager.shared.lastUpdateCheckAt)
+            case .failure(let error):
+                self.updateStatusLabel.stringValue = "Check failed: \(error.localizedDescription)"
+            }
+        }
     }
 
     @objc private func resetOpenWith() {

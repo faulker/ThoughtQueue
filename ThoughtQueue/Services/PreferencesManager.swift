@@ -18,6 +18,8 @@ extension Notification.Name {
     static let noteAlwaysOnTopDidChange = Notification.Name("noteAlwaysOnTopDidChange")
     /// Posted when the settings-sync toggle flips, so the sync mirror can start or stop.
     static let syncSettingsEnabledDidChange = Notification.Name("syncSettingsEnabledDidChange")
+    /// Posted when the update-check toggle or interval changes, so the scheduler re-arms.
+    static let updateCheckSettingsDidChange = Notification.Name("updateCheckSettingsDidChange")
 }
 
 /// How clicking a note in the UI behaves.
@@ -60,6 +62,9 @@ final class PreferencesManager {
         static let noteWindowHeight = "noteWindowHeight"
         static let noteNavigatorWidth = "noteNavigatorWidth"
         static let syncSettings = "syncSettingsEnabled"
+        static let autoUpdateCheckEnabled = "autoUpdateCheckEnabled"
+        static let updateCheckIntervalHours = "updateCheckIntervalHours"
+        static let lastUpdateCheckAt = "lastUpdateCheckAt"
     }
 
     private init() {}
@@ -78,6 +83,7 @@ final class PreferencesManager {
         Keys.editorFontName, Keys.editorFontSize,
         Keys.noteAlwaysOnTop, Keys.noteWindowWidth, Keys.noteWindowHeight,
         Keys.noteNavigatorWidth,
+        Keys.autoUpdateCheckEnabled, Keys.updateCheckIntervalHours,
     ]
 
     /// Whether syncable settings are mirrored into the store folder so other devices pointed at
@@ -273,6 +279,46 @@ final class PreferencesManager {
     var autoIntelEnabled: Bool {
         get { defaults.object(forKey: Keys.autoIntelEnabled) == nil ? true : defaults.bool(forKey: Keys.autoIntelEnabled) }
         set { defaults.set(newValue, forKey: Keys.autoIntelEnabled) }
+    }
+
+    // MARK: - Updates
+
+    /// The interval used when nothing is stored yet, and the bounds a stored value is clamped to.
+    static let defaultUpdateCheckIntervalHours = 24
+
+    /// Whether ThoughtQueue checks GitHub Releases for a newer version at launch and on an
+    /// interval. On by default. Changing it posts `.updateCheckSettingsDidChange` so
+    /// `UpdateService` re-arms its timer immediately.
+    var autoUpdateCheckEnabled: Bool {
+        get { defaults.object(forKey: Keys.autoUpdateCheckEnabled) == nil ? true : defaults.bool(forKey: Keys.autoUpdateCheckEnabled) }
+        set {
+            defaults.set(newValue, forKey: Keys.autoUpdateCheckEnabled)
+            NotificationCenter.default.post(name: .updateCheckSettingsDidChange, object: nil)
+        }
+    }
+
+    /// How many hours between automatic update checks. Clamped to between an hour and a week so
+    /// a hand-edited or synced value can't produce a runaway timer.
+    var updateCheckIntervalHours: Int {
+        get {
+            let hours = defaults.integer(forKey: Keys.updateCheckIntervalHours)
+            guard hours > 0 else { return Self.defaultUpdateCheckIntervalHours }
+            return min(max(hours, 1), 168)
+        }
+        set {
+            defaults.set(min(max(newValue, 1), 168), forKey: Keys.updateCheckIntervalHours)
+            NotificationCenter.default.post(name: .updateCheckSettingsDidChange, object: nil)
+        }
+    }
+
+    /// When the last update check completed, successful or not. Device-local: never synced,
+    /// since another Mac's check says nothing about this one.
+    var lastUpdateCheckAt: Date? {
+        get {
+            let stamp = defaults.double(forKey: Keys.lastUpdateCheckAt)
+            return stamp > 0 ? Date(timeIntervalSince1970: stamp) : nil
+        }
+        set { defaults.set(newValue?.timeIntervalSince1970 ?? 0, forKey: Keys.lastUpdateCheckAt) }
     }
 
     // MARK: - Open-with actions

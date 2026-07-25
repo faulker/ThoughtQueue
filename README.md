@@ -22,6 +22,7 @@ You're reading something, debugging code, or thinking out loud and want to jot i
 - **Local, plain-text storage** -- notes are `.md` files in a folder you choose; no database, so they're greppable and easy to sync or back up yourself
 - **Synced settings** -- on by default: your preferences (hotkeys, fonts, Open With actions, and the rest) are mirrored into the store folder, so if that folder is in iCloud/Dropbox they follow you to your other devices. Turn it off in Preferences to keep settings local
 - **Customizable hotkeys** -- change shortcuts in Preferences
+- **Auto-update** -- checks GitHub Releases at launch and on an interval you choose, then offers to download, verify, install, and restart itself. Turn it off or check on demand in Preferences
 
 ## Requirements
 
@@ -169,9 +170,17 @@ Right-click the menu bar icon > **Preferences**. Click a shortcut field and pres
 
 Settings sync is on by default. ThoughtQueue mirrors your syncable preferences into a hidden `.thoughtqueue/settings.plist` file inside the store folder, so if that folder lives in iCloud, Dropbox, or similar, your other Macs pointed at the same folder pick up the changes (last write wins). Device-local values (the store folder location itself and the working-document path) are never synced. Toggle it off under **Preferences > Sync settings via store folder** to keep settings on this Mac only.
 
+### Keep the app up to date
+
+ThoughtQueue checks for new releases about five seconds after launch and then on an interval, and tells you when a newer version is published. Choosing **Update & Restart** downloads the release zip, checks it against the release's published SHA-256 checksum, replaces the installed app, and relaunches. Choosing **Later** does nothing and you won't be asked again until the next scheduled check. If the download or checksum fails, your installed copy is left untouched.
+
+Under **Preferences > Updates** you'll find the running version, a **Check Now** button, a toggle for automatic checks, and the interval (hourly, every 6 hours, daily, or weekly). If ThoughtQueue is installed somewhere you can't write to, it offers to open the release page instead so you can install it by hand.
+
 ## How it works
 
-ThoughtQueue uses macOS Accessibility APIs (`CGEventTap`) to listen for global hotkeys and simulate keyboard input. Text capture works by simulating Cmd+C, reading the pasteboard, then restoring it. "Open With" destinations either shell out via `Process` (command type) or activate the target app and simulate keystrokes to paste (app-input type) -- no API keys or network calls needed either way.
+ThoughtQueue uses macOS Accessibility APIs (`CGEventTap`) to listen for global hotkeys and simulate keyboard input. Text capture works by simulating Cmd+C, reading the pasteboard, then restoring it. "Open With" destinations either shell out via `Process` (command type) or activate the target app and simulate keystrokes to paste (app-input type) -- no API keys needed either way.
+
+The only network access in the app is the update check: a `HEAD` request to the repo's public `releases/latest` URL, which redirects to the newest tag. No GitHub API, no auth, no telemetry.
 
 Notes are plain `.md` files in a folder you choose (default `~/Documents/ThoughtQueue`); categories are just subfolders. There's no database -- the filesystem is the source of truth, so notes are portable and easy to sync or back up yourself.
 
