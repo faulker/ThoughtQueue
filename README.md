@@ -24,6 +24,28 @@ You're reading something, debugging code, or thinking out loud and want to jot i
 - **Customizable hotkeys** -- change shortcuts in Preferences
 - **Auto-update** -- checks GitHub Releases at launch and on an interval you choose, then offers to download, verify, install, and restart itself. Turn it off or check on demand in Preferences
 
+## Screenshots
+
+### Menu bar popover
+Left-click the menu bar icon to see your notes with quick actions (copy, open with, move, delete):
+
+<img src="screenshots/popover.png" alt="Menu bar popover showing notes list" width="400">
+
+### Note editor
+Every note opens in its own window with a view/edit toggle; markdown renders by default:
+
+<img src="screenshots/note-editor.png" alt="Note editor showing rendered markdown" width="500">
+
+### Navigation panel
+The collapsible sidebar lists every note grouped by category, with search:
+
+<img src="screenshots/sidebar.png" alt="Note window with the navigation sidebar open" width="600">
+
+### Preferences
+Configure hotkeys, "Open With" destinations, fonts, auto-update intervals, and more:
+
+<img src="screenshots/preferences.png" alt="Preferences window" width="400">
+
 ## Requirements
 
 - macOS 14.0+ (macOS 26+ for optional on-device auto-title/auto-category)
