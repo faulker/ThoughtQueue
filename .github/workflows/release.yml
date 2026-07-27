@@ -225,6 +225,9 @@ jobs:
               DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
               ENABLE_HARDENED_RUNTIME=YES
               OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime"
+              # xcodebuild build (unlike archive) injects get-task-allow=YES by
+              # default so a debugger can attach; notarization rejects that.
+              CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
             )
           else
             ARGS+=(CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO)
