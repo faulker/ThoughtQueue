@@ -126,11 +126,12 @@ All of these are optional. With none of them set you still get a release, just a
 | `MACOS_CERTIFICATE` | Developer ID Application certificate as a base64-encoded `.p12` |
 | `MACOS_CERTIFICATE_PASSWORD` | Password used when exporting that `.p12` |
 | `APPLE_TEAM_ID` | 10-character Apple Developer Team ID |
-| `APPLE_ID` | Apple ID email, enables notarization |
-| `APPLE_APP_PASSWORD` | [App-specific password](https://support.apple.com/en-us/102654) for that Apple ID |
+| `APPLE_NOTARY_KEY` | App Store Connect API key as a base64-encoded `.p8`, enables notarization |
+| `APPLE_NOTARY_KEY_ID` | 10-character Key ID for that API key |
+| `APPLE_NOTARY_ISSUER_ID` | Issuer ID (UUID) for that API key |
 | `RELEASE_PAT` | Only needed if branch protection blocks the default token from pushing the version-bump commit |
 
-Signing needs `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PASSWORD`, and `APPLE_TEAM_ID`. Notarization additionally needs `APPLE_ID` and `APPLE_APP_PASSWORD`.
+Signing needs `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PASSWORD`, and `APPLE_TEAM_ID`. Notarization additionally needs `APPLE_NOTARY_KEY`, `APPLE_NOTARY_KEY_ID`, and `APPLE_NOTARY_ISSUER_ID`.
 
 To export the certificate: Keychain Access, right-click your `Developer ID Application` identity, **Export** as `.p12`, then
 
@@ -139,6 +140,14 @@ base64 -i Certificates.p12 | pbcopy
 ```
 
 and paste that into the `MACOS_CERTIFICATE` secret.
+
+To get the notary API key: [App Store Connect > Users and Access > Integrations > Keys](https://appstoreconnect.apple.com/access/integrations/api), create a key with the **Developer** role, download the `.p8` (Apple only lets you download it once), then
+
+```bash
+base64 -i AuthKey_XXXXXXXXXX.p8 | pbcopy
+```
+
+and paste that into the `APPLE_NOTARY_KEY` secret. The Key ID and Issuer ID are shown on the same page.
 
 The manual run also has a **Skip the test suite** checkbox for the case where CI tests are broken but you need to ship. It applies to that one run only; tag pushes always run the tests.
 
