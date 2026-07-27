@@ -28,7 +28,12 @@ enum MarkdownRenderer {
             let attributed = renderLine(lines[index], baseFont: baseFont)
             result.append(attributed)
             if index < lines.count - 1 {
-                result.append(NSAttributedString(string: "\n"))
+                // Attribute the separator: an unattributed run leaks into raw edit mode,
+                // where replacing the text inherits the first character's attributes.
+                result.append(NSAttributedString(string: "\n", attributes: [
+                    .font: baseFont,
+                    .foregroundColor: NSColor.labelColor,
+                ]))
             }
             index += 1
         }
@@ -243,8 +248,12 @@ enum MarkdownRenderer {
                 case .trailing: paragraph.alignment = .right
                 }
 
-                let cell = inline(text, baseFont: row.isHeader ? headerFont : baseFont)
-                cell.append(NSAttributedString(string: "\n"))
+                let cellFont = row.isHeader ? headerFont : baseFont
+                let cell = inline(text, baseFont: cellFont)
+                cell.append(NSAttributedString(string: "\n", attributes: [
+                    .font: cellFont,
+                    .foregroundColor: NSColor.labelColor,
+                ]))
                 cell.addAttribute(.paragraphStyle, value: paragraph,
                                   range: NSRange(location: 0, length: cell.length))
                 result.append(cell)

@@ -737,13 +737,15 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         isEditing = true
         isDirty = false
         textView.isEditable = true
-        // Pin the editor font: setting `string` adopts current typing attributes, which
-        // after a markdown render may carry a larger heading font. Reset them so raw
-        // text stays consistent.
+        // Pin the editor font and color: setting `string` inherits the attributes of the
+        // rendered text's first character, which may be a larger heading font or (when the
+        // note starts with a blank line) no attributes at all. Text with no foreground
+        // color draws black regardless of appearance, so reapply both explicitly.
         let font = PreferencesManager.shared.editorFont
         textView.typingAttributes = [.font: font, .foregroundColor: NSColor.labelColor]
         textView.string = NoteStore.shared.body(of: note)
         textView.font = font
+        textView.textColor = .labelColor
         noteUndoManager.removeAllActions()
     }
 

@@ -108,4 +108,38 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertTrue(attributed.string.contains("Heading"))
         XCTAssertTrue(attributed.string.contains("plain line"))
     }
+
+    /// Every character must carry a foreground color. An unattributed run (the newline
+    /// separators used to leak one) draws black no matter the appearance, and it also
+    /// infects raw edit mode, which inherits the first character's attributes.
+    func testEveryCharacterCarriesAForegroundColor() {
+        let markdown = """
+
+        # Heading
+        body **bold** text
+        - bullet
+        - [x] done
+        | A | B |
+        | --- | --- |
+        | 1 | 2 |
+        """
+        let attributed = MarkdownRenderer.render(markdown)
+        XCTAssertGreaterThan(attributed.length, 0)
+
+        var uncolored: [NSRange] = []
+        attributed.enumerateAttribute(.foregroundColor,
+                                      in: NSRange(location: 0, length: attributed.length)) { value, range, _ in
+            if value as? NSColor == nil { uncolored.append(range) }
+        }
+        XCTAssertTrue(uncolored.isEmpty, "runs without a foreground color: \(uncolored)")
+    }
+
+    /// A note that starts with a blank line renders a separator as its first character;
+    /// that character has to be colored, since edit mode copies its attributes.
+    func testLeadingBlankLineIsColored() {
+        let attributed = MarkdownRenderer.render("\nfirst real line")
+        let first = attributed.attributes(at: 0, effectiveRange: nil)
+        XCTAssertEqual(first[.foregroundColor] as? NSColor, NSColor.labelColor)
+        XCTAssertNotNil(first[.font] as? NSFont)
+    }
 }

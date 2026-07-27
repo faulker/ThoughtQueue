@@ -291,6 +291,37 @@ final class NoteWindowControllerTests: XCTestCase {
         XCTAssertEqual(textView.string, "start more", "redo should reapply the typed text")
     }
 
+    /// Raw edit mode must color the whole buffer. Setting `string` inherits the attributes
+    /// of the rendered text's first character, and a note starting with a blank line used to
+    /// leave that character (a separator newline) unattributed: the body then had no
+    /// foreground color and drew black, while freshly typed text stayed `labelColor`.
+    func testEditModeColorsEntireBufferForNoteStartingWithBlankLine() throws {
+        let note = try XCTUnwrap(store.createNote(title: "Blank First Line",
+                                                  body: "\nbody text here", category: nil))
+        NoteWindowController.show(note: note)
+
+        let window = try window(for: note)
+        let editor = try XCTUnwrap(window.noteEditor)
+        editor.perform(Selector(("toggleMode"))) // into edit mode
+        let textView = try XCTUnwrap(firstView(NSTextView.self, in: editor.view))
+        let storage = try XCTUnwrap(textView.textStorage)
+
+        XCTAssertEqual(textView.textColor, NSColor.labelColor)
+        var uncolored: [NSRange] = []
+        storage.enumerateAttribute(.foregroundColor,
+                                   in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+            if value as? NSColor == nil { uncolored.append(range) }
+        }
+        XCTAssertTrue(uncolored.isEmpty, "edit-mode text without a color draws black: \(uncolored)")
+
+        // Typed text must match the existing text rather than standing out against it.
+        textView.selectedRange = NSRange(location: storage.length, length: 0)
+        textView.insertText("X", replacementRange: textView.selectedRange())
+        let typed = storage.attributes(at: storage.length - 1, effectiveRange: nil)
+        let existing = storage.attributes(at: 0, effectiveRange: nil)
+        XCTAssertEqual(typed[.foregroundColor] as? NSColor, existing[.foregroundColor] as? NSColor)
+    }
+
     /// Switching modes reloads the buffer from disk outside of the undo-registering text
     /// path; any undo history from a prior edit session must not survive the reload, since
     /// it would otherwise point at text ranges that no longer exist.
