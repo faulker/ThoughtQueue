@@ -51,6 +51,13 @@ final class NoteWindowControllerTests: XCTestCase {
         try XCTUnwrap(noteWindows().first { $0.title == note.title })
     }
 
+    /// Whether `window` is the frontmost note window in AppKit's z-order. Prefer this over
+    /// `isKeyWindow` in tests: the XCTest host often keeps key status on the runner UI, so
+    /// key assertions flake even when `makeKeyAndOrderFront` correctly reordered the window.
+    private func isFrontmostNoteWindow(_ window: NSWindow) -> Bool {
+        NSApp.orderedWindows.first { $0.noteEditor != nil } === window
+    }
+
     func testOpeningSameNoteTwiceReusesWindow() throws {
         let note = try XCTUnwrap(store.createNote(title: "Reuse Me", body: "hello", category: nil))
         let before = noteWindows().count
@@ -59,6 +66,45 @@ final class NoteWindowControllerTests: XCTestCase {
         NoteWindowController.show(note: note)
 
         XCTAssertEqual(noteWindows().count, before + 1, "same note should reuse a single window")
+    }
+
+    /// Re-selecting an already-open note must bring its window to the front and mark it to
+    /// follow the active Space, so a window left on another desktop comes to the user.
+    func testReselectingOpenNoteFocusesItsWindow() throws {
+        let note = try XCTUnwrap(store.createNote(title: "Focus Me", body: "hello", category: nil))
+        NoteWindowController.show(note: note)
+        let noteWindow = try window(for: note)
+
+        // Cover the window with another note so the re-select has something to restore.
+        let other = try XCTUnwrap(store.createNote(title: "Cover Focus", body: "x", category: nil))
+        NoteWindowController.show(note: other)
+        let otherWindow = try window(for: other)
+        otherWindow.makeKeyAndOrderFront(nil)
+        XCTAssertTrue(isFrontmostNoteWindow(otherWindow), "setup: the cover window should be frontmost")
+
+        NoteWindowController.show(note: note)
+
+        XCTAssertTrue(isFrontmostNoteWindow(noteWindow), "re-selecting an open note should order its window front")
+        XCTAssertTrue(
+            noteWindow.collectionBehavior.contains(.moveToActiveSpace),
+            "focusing must pull the window onto the active Space rather than leaving it elsewhere"
+        )
+        XCTAssertTrue(noteWindow.isVisible, "the focused window should be visible")
+    }
+
+    /// A Dock-minimized note window must come back when its note is selected again.
+    func testReselectingMinimizedNoteDeminiaturizesWindow() throws {
+        let note = try XCTUnwrap(store.createNote(title: "Mini Focus", body: "hello", category: nil))
+        NoteWindowController.show(note: note)
+        let noteWindow = try window(for: note)
+        noteWindow.miniaturize(nil)
+        // Miniaturize is a no-op in some XCTest hosts (no Dock animation / window server).
+        try XCTSkipIf(!noteWindow.isMiniaturized, "miniaturize unsupported in this test host")
+
+        NoteWindowController.show(note: note)
+
+        XCTAssertFalse(noteWindow.isMiniaturized, "re-selecting must restore a minimized note window")
+        XCTAssertTrue(isFrontmostNoteWindow(noteWindow), "the restored window should be ordered front")
     }
 
     func testWindowOpensInViewMode() throws {
@@ -525,12 +571,19 @@ final class NoteWindowControllerTests: XCTestCase {
         NoteWindowController.show(note: second)
 
         let firstWindow = try window(for: first)
+        let secondWindow = try window(for: second)
+        firstWindow.makeKeyAndOrderFront(nil)
         let windowCount = noteWindows().count
         try revealNavigator(in: firstWindow)
         try selectInNavigator(second, in: firstWindow)
 
         XCTAssertEqual(firstWindow.title, first.title, "the first window should keep its own note")
         XCTAssertEqual(noteWindows().count, windowCount, "no window should be opened or closed")
+        XCTAssertTrue(isFrontmostNoteWindow(secondWindow), "selecting an already-open note should focus its window")
+        XCTAssertTrue(
+            secondWindow.collectionBehavior.contains(.moveToActiveSpace),
+            "navigator focus must also pull the other window onto the active Space"
+        )
     }
 
     func testSelectingDeletedNoteLeavesWindowUnchanged() throws {

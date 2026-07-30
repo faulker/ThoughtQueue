@@ -48,7 +48,7 @@ Releases are built by `.github/workflows/release.yml` (tag push `v*` or manual r
 - **Right-click menu bar icon**: Context menu with "Open ThoughtQueue" (full window), Preferences, Quit
 - **MainWindowController**: NSSplitViewController with category sidebar + entries table + "Clear Completed"
 - **NoteWindowController**: The single note window for creating, viewing, and editing a note (inline editable title + category dropdown, view/edit toggle). Used by "+ Add Note" and detailed capture alike. Its content is an `NSSplitViewController`: `NoteNavigatorViewController` in a collapsible sidebar item (hidden by default, toggled from the header or Ctrl+Cmd+S) plus `NoteEditorViewController`. Reach the editor from a window via `NSWindow.noteEditor`.
-- **NoteNavigatorViewController**: The note window's navigation panel. Source-list outline of notes grouped by category with a fuzzy search field; selecting a note retargets the same window via `NoteEditorViewController.load(note:)`, unless that note already has its own window (which is fronted instead).
+- **NoteNavigatorViewController**: The note window's navigation panel. Source-list outline of notes grouped by category with a fuzzy search field; selecting a note retargets the same window via `NoteEditorViewController.load(note:)`, unless that note already has its own window (which is focused via `NoteWindowController.focus`, including deminiaturize and `.moveToActiveSpace`).
 
 ### Auto-update
 

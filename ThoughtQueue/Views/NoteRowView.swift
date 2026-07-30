@@ -85,10 +85,11 @@ final class NoteRowView: NSView {
     override func mouseExited(with event: NSEvent) { hovering = false }
 
     /// Clicking the row body (anywhere the action buttons don't intercept) opens the
-    /// note in its own view/edit window and dismisses the popover.
+    /// note in its own view/edit window and dismisses the popover. Close the popover
+    /// first so dismissal does not steal activation back from the note window.
     override func mouseDown(with event: NSEvent) {
-        NoteWindowController.show(note: note)
         onAction()
+        NoteWindowController.show(note: note)
     }
 
     override var wantsUpdateLayer: Bool { true }

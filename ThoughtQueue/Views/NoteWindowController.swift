@@ -44,11 +44,27 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     static func show(note: Note) {
         let key = note.url.standardizedFileURL
         if let existing = open[key] {
-            existing.window?.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            focus(existing.window)
             return
         }
         present(note: note, startInEditMode: false)
+    }
+
+    /// Bring an already-open note window to the front of the Space the user is on.
+    ///
+    /// `makeKeyAndOrderFront` alone leaves a window on another desktop where it is, so
+    /// re-selecting that note from the popover or navigator feels like a no-op. Adding
+    /// `.moveToActiveSpace` pulls the window onto the current Space; deminiaturizing
+    /// covers the Dock-minimized case. Activate the app before ordering front so
+    /// LSUIElement / accessory policy still receives key status.
+    static func focus(_ window: NSWindow?) {
+        guard let window else { return }
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        window.collectionBehavior.insert(.moveToActiveSpace)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 
     /// Create a brand-new note (empty by default, or pre-filled with `body`) and open the
@@ -70,8 +86,7 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         let wc = NoteWindowController(note: note, startInEditMode: startInEditMode)
         open[key] = wc
         wc.showWindow(nil)
-        wc.window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        focus(wc.window)
     }
 
     private init(note: Note, startInEditMode: Bool) {
@@ -220,7 +235,11 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     /// invariant: a note that already has its own window is fronted rather than stolen.
     private func retarget(to note: Note) {
         let key = note.url.standardizedFileURL
-        guard key != noteURL else { return }
+        guard key != noteURL else {
+            // Already showing this note — still focus this window (minimized / buried).
+            Self.focus(window)
+            return
+        }
 
         guard FileManager.default.fileExists(atPath: note.url.path) else {
             ToastWindow.show(message: "Note no longer exists")
@@ -230,9 +249,10 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         }
 
         if let existing = NoteWindowController.open[key], existing !== self {
-            existing.window?.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            // Restore this window's navigator selection before focusing the other window;
+            // outline selection otherwise orders this window front again and undoes the focus.
             navigator.highlight(note: editor.currentNote)
+            Self.focus(existing.window)
             return
         }
 
