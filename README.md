@@ -15,6 +15,7 @@ You're reading something, debugging code, or thinking out loud and want to jot i
 - **Note editor** -- a single window per note with a view/edit toggle: markdown renders by default, click or start typing to edit the raw text, with autosave and full undo/redo (Cmd+Z / Cmd+Shift+Z)
 - **Navigation panel** -- the note window has a collapsible panel on the left listing every note grouped by category, with a search field. Hidden by default; the sidebar button in the header (or Ctrl+Cmd+S) reveals it, and picking a note switches the window over to it
 - **Copy, don't just open** -- one click to copy a note's full body or its file path straight to the clipboard, right from its row
+- **Clone note** -- duplicate a note from the popover row; the copy keeps the same body and category, titled `copy <original>`
 - **Run notes anywhere** -- configurable "Open With" destinations: run a shell command against the note's file (open it in an editor, hand it to a CLI tool, whatever `{path}` template you want), or paste it into an app like Claude Desktop. Comes with Claude and Zed presets; add, edit, or remove your own in Preferences
 - **Categories** -- organize notes however you want; create, rename, move between, or delete categories, with folders on disk to match. New categories can also be created inline from any category dropdown
 - **Working document** -- optionally designate one note as the default sink so quick captures append to it instead of creating a new file each time
@@ -22,12 +23,12 @@ You're reading something, debugging code, or thinking out loud and want to jot i
 - **Local, plain-text storage** -- notes are `.md` files in a folder you choose; no database, so they're greppable and easy to sync or back up yourself
 - **Synced settings** -- on by default: your preferences (hotkeys, fonts, Open With actions, and the rest) are mirrored into the store folder, so if that folder is in iCloud/Dropbox they follow you to your other devices. Turn it off in Preferences to keep settings local
 - **Customizable hotkeys** -- change shortcuts in Preferences
-- **Auto-update** -- checks GitHub Releases at launch and on an interval you choose, then offers to download, verify, install, and restart itself. Turn it off or check on demand in Preferences
+- **Auto-update** -- for installed / downloaded copies, checks GitHub Releases at launch and on an interval you choose, then offers to download, verify, install, and restart itself. Local Xcode / `build.sh` builds skip this. Turn it off or check on demand in Preferences
 
 ## Screenshots
 
 ### Menu bar popover
-Left-click the menu bar icon to see your notes with quick actions (copy, open with, move, delete):
+Left-click the menu bar icon to see your notes with quick actions (copy, open with, clone, delete):
 
 <img src="screenshots/popover.png" alt="Menu bar popover showing notes list" width="400">
 
@@ -168,7 +169,7 @@ Select text in any app, hit the shortcut, and keep working. A toast confirms the
 
 ### Manage your notes
 
-- **Left-click** the menu bar icon to open a popover with a searchable notes list and quick actions on each row (Open with, Move to category, Copy note, Copy path, Delete)
+- **Left-click** the menu bar icon to open a popover with a searchable notes list and quick actions on each row (Open with, Clone note, Copy note, Copy path, Delete)
 - **Double-click** the menu bar icon to open your working document. Set one first by right-clicking a note in the full management window and picking **Set as Working Document**
 - **Right-click** the menu bar icon for the full management window, preferences, or to quit
 
@@ -204,6 +205,8 @@ Settings sync is on by default. ThoughtQueue mirrors your syncable preferences i
 ### Keep the app up to date
 
 ThoughtQueue checks for new releases about five seconds after launch and then on an interval, and tells you when a newer version is published. Choosing **Update & Restart** downloads the release zip, checks it against the release's published SHA-256 checksum, replaces the installed app, and relaunches. Choosing **Later** does nothing and you won't be asked again until the next scheduled check. If the download or checksum fails, your installed copy is left untouched.
+
+Update checks only run for installed or downloaded copies (for example under `/Applications`). Local development builds from Xcode or `./build.sh` (paths under `DerivedData` or `Build/Products`) never check or prompt, so a newer GitHub release won't interrupt a debug session or overwrite your build product.
 
 Under **Preferences > Updates** you'll find the running version, a **Check Now** button, a toggle for automatic checks, and the interval (hourly, every 6 hours, daily, or weekly). If ThoughtQueue is installed somewhere you can't write to, it offers to open the release page instead so you can install it by hand.
 

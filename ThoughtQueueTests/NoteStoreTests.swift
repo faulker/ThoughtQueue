@@ -85,6 +85,28 @@ final class NoteStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: note.url.path))
     }
 
+    func testCloneTitlePrefixesCopy() throws {
+        let note = try XCTUnwrap(store.createNote(title: "Parent Note", body: "body", category: nil))
+        XCTAssertEqual(NoteStore.cloneTitle(for: note), "copy \(note.title)")
+    }
+
+    func testCloneDuplicatesBodyAndCategory() throws {
+        let original = try XCTUnwrap(store.createNote(title: "Original", body: "shared body", category: "Work"))
+        let cloned = try XCTUnwrap(store.clone(original))
+        XCTAssertEqual(cloned.title, "copy-original")
+        XCTAssertEqual(cloned.category, "Work")
+        XCTAssertEqual(store.body(of: cloned), "shared body")
+        XCTAssertNotEqual(cloned.url, original.url)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: original.url.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cloned.url.path))
+    }
+
+    func testCloneMissingSourceFails() throws {
+        let note = try XCTUnwrap(store.createNote(title: "Gone", body: "x", category: nil))
+        try FileManager.default.removeItem(at: note.url)
+        XCTAssertNil(store.clone(note))
+    }
+
     func testCreateEmptyCategoryIsListed() throws {
         XCTAssertTrue(store.createCategory("Inbox"))
         // An empty category folder (no notes yet) must still appear in the listing.

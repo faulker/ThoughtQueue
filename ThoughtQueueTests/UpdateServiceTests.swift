@@ -171,4 +171,25 @@ final class UpdateServiceTests: XCTestCase {
         XCTAssertFalse(version.isEmpty)
         XCTAssertNotNil(Int(version.split(separator: ".").first.map(String.init) ?? "x"))
     }
+
+    func testLocalDevelopmentBuildDetectsDerivedDataAndBuildProducts() {
+        let derived = URL(fileURLWithPath:
+            "/Users/me/Library/Developer/Xcode/DerivedData/ThoughtQueue-abc/Build/Products/Debug/ThoughtQueue.app")
+        XCTAssertTrue(UpdateService.isLocalDevelopmentBuild(bundleURL: derived))
+
+        let buildScript = URL(fileURLWithPath:
+            "/Users/me/Dev/ThoughtQueue/build/Build/Products/Release/ThoughtQueue.app")
+        XCTAssertTrue(UpdateService.isLocalDevelopmentBuild(bundleURL: buildScript))
+    }
+
+    func testLocalDevelopmentBuildRejectsInstalledAndDownloadedPaths() {
+        let applications = URL(fileURLWithPath: "/Applications/ThoughtQueue.app")
+        XCTAssertFalse(UpdateService.isLocalDevelopmentBuild(bundleURL: applications))
+
+        let homeApps = URL(fileURLWithPath: "/Users/me/Applications/ThoughtQueue.app")
+        XCTAssertFalse(UpdateService.isLocalDevelopmentBuild(bundleURL: homeApps))
+
+        let downloads = URL(fileURLWithPath: "/Users/me/Downloads/ThoughtQueue.app")
+        XCTAssertFalse(UpdateService.isLocalDevelopmentBuild(bundleURL: downloads))
+    }
 }

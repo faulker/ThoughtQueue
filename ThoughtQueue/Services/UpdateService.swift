@@ -34,8 +34,9 @@ final class UpdateService {
         var checksumsURL: URL { UpdateService.assetURL(version: version, filename: "checksums-sha256.txt") }
     }
 
-    enum UpdateError: LocalizedError {
+    enum UpdateError: LocalizedError, Equatable {
         case alreadyChecking
+        case localDevelopmentBuild
         case badResponse
         case unreadableVersion
         case checksumMissing(String)
@@ -49,6 +50,8 @@ final class UpdateService {
             switch self {
             case .alreadyChecking:
                 return "A check is already in progress."
+            case .localDevelopmentBuild:
+                return "Local development build — updates are only offered for installed releases."
             case .badResponse:
                 return "GitHub did not return a usable response."
             case .unreadableVersion:
@@ -96,6 +99,13 @@ final class UpdateService {
     /// The running app's marketing version, e.g. "1.0.0".
     static func currentVersion() -> String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
+    }
+
+    /// True when this process is an Xcode / `build.sh` product, not a downloaded or
+    /// Applications-installed copy. Those live under `DerivedData` or `Build/Products`.
+    static func isLocalDevelopmentBuild(bundleURL: URL = Bundle.main.bundleURL) -> Bool {
+        let path = bundleURL.standardizedFileURL.path
+        return path.contains("/DerivedData/") || path.contains("/Build/Products/")
     }
 
     /// Pulls "1.2.3" out of a `.../releases/tag/v1.2.3` URL. Returns nil if the last path
@@ -184,6 +194,11 @@ final class UpdateService {
             self, selector: #selector(systemDidWake), name: NSWorkspace.didWakeNotification, object: nil
         )
 
+        guard !Self.isLocalDevelopmentBuild() else {
+            log.info("Skipping update scheduler for local development build")
+            return
+        }
+
         guard PreferencesManager.shared.autoUpdateCheckEnabled else {
             log.info("Automatic update checks are disabled")
             return
@@ -209,6 +224,7 @@ final class UpdateService {
     }
 
     @objc private func systemDidWake() {
+        guard !Self.isLocalDevelopmentBuild() else { return }
         guard PreferencesManager.shared.autoUpdateCheckEnabled else { return }
         let interval = TimeInterval(PreferencesManager.shared.updateCheckIntervalHours) * 3600
         guard let last = PreferencesManager.shared.lastUpdateCheckAt else {
@@ -225,7 +241,15 @@ final class UpdateService {
     /// Asks GitHub for the latest published release. `completion` runs on the main thread with
     /// the newer release, or nil when already up to date. Automatic checks prompt at most once
     /// per version per app run; user-initiated checks always report back.
+    ///
+    /// Local development builds (Xcode / `build.sh` products) never check or prompt: an
+    /// in-place update would overwrite the build product, and version tags usually lag HEAD.
     func check(userInitiated: Bool, completion: ((Result<Release?, Error>) -> Void)? = nil) {
+        guard !Self.isLocalDevelopmentBuild() else {
+            log.info("Skipping update check for local development build")
+            completion?(.failure(UpdateError.localDevelopmentBuild))
+            return
+        }
         guard !isChecking else {
             log.info("Update check already in flight, skipping")
             // Still report back, or a caller like the Preferences "Check Now" button would sit

@@ -268,6 +268,22 @@ final class NoteStore {
         return note
     }
 
+    /// Title used when cloning a note: parent title with "copy" prefixed.
+    static func cloneTitle(for note: Note) -> String {
+        "copy \(note.title)"
+    }
+
+    /// Duplicate a note into the same category with title `copy <parent title>`.
+    /// Returns the new Note or nil if the source is missing or creation fails.
+    @discardableResult
+    func clone(_ note: Note) -> Note? {
+        guard fm.fileExists(atPath: note.url.path) else {
+            log.warning("clone source missing: \(note.url.path)")
+            return nil
+        }
+        return createNote(title: Self.cloneTitle(for: note), body: body(of: note), category: note.category)
+    }
+
     /// Append text to an existing note, separated by a blank line. Returns true on success.
     @discardableResult
     func append(to note: Note, text: String) -> Bool {

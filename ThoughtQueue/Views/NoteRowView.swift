@@ -1,7 +1,7 @@
 import Cocoa
 
 /// A single note row used in the popover. Shows the title + category and offers quick
-/// actions: open-with (default action), copy path, and delete.
+/// actions: open-with, clone, copy note, copy path, and delete.
 final class NoteRowView: NSView {
     private let note: Note
     private let onAction: () -> Void
@@ -39,13 +39,13 @@ final class NoteRowView: NSView {
         catLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let openBtn = makeIconButton("arrow.up.forward.app", tip: "Open with\u{2026}", action: #selector(openWith(_:)))
-        let categoryBtn = makeIconButton("tag", tip: "Move to category\u{2026}", action: #selector(moveToCategory(_:)))
+        let cloneBtn = makeIconButton("plus.square.on.square", tip: "Clone note", action: #selector(cloneNote))
         let copyNoteBtn = makeIconButton("doc.on.doc", tip: "Copy note", action: #selector(copyNote))
         let copyPathBtn = makeIconButton("folder", tip: "Copy path", action: #selector(copyPath))
         let deleteBtn = makeIconButton("trash", tip: "Delete", action: #selector(confirmDelete))
         deleteBtn.contentTintColor = .systemRed
 
-        let actions = NSStackView(views: [openBtn, categoryBtn, copyNoteBtn, copyPathBtn, deleteBtn])
+        let actions = NSStackView(views: [openBtn, cloneBtn, copyNoteBtn, copyPathBtn, deleteBtn])
         actions.orientation = .horizontal
         actions.spacing = 2
         actions.translatesAutoresizingMaskIntoConstraints = false
@@ -145,59 +145,13 @@ final class NoteRowView: NSView {
         onAction()
     }
 
-    /// Pop up a menu to re-file this note: Uncategorized, each existing category (current one
-    /// checked), and a New Category prompt. Selecting one moves the note and closes the popover.
-    @objc private func moveToCategory(_ sender: NSButton) {
-        let menu = NSMenu()
-        let uncat = NSMenuItem(title: Note.uncategorized, action: #selector(runMoveTo(_:)), keyEquivalent: "")
-        uncat.target = self
-        uncat.representedObject = NSNull() // bridges to nil = Uncategorized
-        uncat.state = note.category == nil ? .on : .off
-        menu.addItem(uncat)
-        for cat in NoteStore.shared.categories() {
-            let item = NSMenuItem(title: cat, action: #selector(runMoveTo(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = cat
-            item.state = note.category == cat ? .on : .off
-            menu.addItem(item)
-        }
-        menu.addItem(.separator())
-        let newItem = NSMenuItem(title: "New Category\u{2026}", action: #selector(newCategoryMove), keyEquivalent: "")
-        newItem.target = self
-        menu.addItem(newItem)
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height), in: sender)
-    }
-
-    @objc private func runMoveTo(_ sender: NSMenuItem) {
-        let target = sender.representedObject as? String // NSNull -> nil = Uncategorized
-        guard target != note.category else { return }
-        if NoteStore.shared.move(note, to: target) == nil {
-            ToastWindow.show(message: "Move failed")
+    /// Duplicate this note with title `copy <parent title>`, same body and category.
+    @objc private func cloneNote() {
+        guard NoteStore.shared.clone(note) != nil else {
+            ToastWindow.show(message: "Clone failed")
             return
         }
-        ToastWindow.show(message: target == nil ? "Moved to Uncategorized" : "Moved to \(target!)")
-        onAction()
-    }
-
-    @objc private func newCategoryMove() {
-        let alert = NSAlert()
-        alert.messageText = "New Category"
-        alert.informativeText = "Enter a name for the new category folder:"
-        alert.addButton(withTitle: "Create")
-        alert.addButton(withTitle: "Cancel")
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
-        alert.accessoryView = input
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        guard let safe = NoteStore.sanitizeCategory(input.stringValue) else {
-            ToastWindow.show(message: "Invalid category name")
-            return
-        }
-        if NoteStore.shared.move(note, to: safe) == nil {
-            ToastWindow.show(message: "Move failed")
-            return
-        }
-        ToastWindow.show(message: "Moved to \(safe)")
-        onAction()
+        ToastWindow.show(message: "Cloned note")
     }
 
     @objc private func copyNote() {

@@ -52,7 +52,7 @@ Releases are built by `.github/workflows/release.yml` (tag push `v*` or manual r
 
 ### Auto-update
 
-`UpdateService` checks GitHub Releases at launch and on a preference-controlled interval. The check is a `HEAD` against the public `releases/latest` URL whose 302 redirect carries the version tag: deliberately **not** the GitHub API, so there is no auth or rate limit. Updating downloads the release zip, verifies it against the release's `checksums-sha256.txt` asset, validates the unpacked bundle's id and version, then hands the swap to a detached shell script that waits for the app to exit before replacing it and relaunching. Version math and checksum parsing are pure statics so they are testable without the network.
+`UpdateService` checks GitHub Releases at launch and on a preference-controlled interval (skipped for local Xcode / `build.sh` products under `DerivedData` or `Build/Products`). The check is a `HEAD` against the public `releases/latest` URL whose 302 redirect carries the version tag: deliberately **not** the GitHub API, so there is no auth or rate limit. Updating downloads the release zip, verifies it against the release's `checksums-sha256.txt` asset, validates the unpacked bundle's id and version, then hands the swap to a detached shell script that waits for the app to exit before replacing it and relaunching. Version math and checksum parsing are pure statics so they are testable without the network.
 
 ### Default hotkeys
 

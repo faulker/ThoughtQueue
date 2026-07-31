@@ -42,4 +42,12 @@ final class NoteRowViewTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(btn.frame.height, 28, "each button should be a padded hit target")
         }
     }
+
+    /// Popover rows expose Clone instead of Move-to-category among the hover actions.
+    func testActionButtonsIncludeCloneNotMoveCategory() {
+        let row = NoteRowView(note: makeNote(), compact: false) {}
+        let tips = Set(buttons(in: row).compactMap(\.toolTip))
+        XCTAssertTrue(tips.contains("Clone note"))
+        XCTAssertFalse(tips.contains("Move to category\u{2026}"))
+    }
 }

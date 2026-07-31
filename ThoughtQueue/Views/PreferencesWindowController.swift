@@ -199,7 +199,15 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         // A network error message can be arbitrarily long; truncate rather than stretch the
         // fixed-width window.
         updateStatusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        updateStatusLabel.stringValue = Self.lastCheckedText(PreferencesManager.shared.lastUpdateCheckAt)
+        if UpdateService.isLocalDevelopmentBuild() {
+            updateStatusLabel.stringValue = UpdateService.UpdateError.localDevelopmentBuild.localizedDescription
+                ?? "Local development build"
+            checkNowButton.isEnabled = false
+            autoUpdateCheckbox.isEnabled = false
+            updateIntervalPopup.isEnabled = false
+        } else {
+            updateStatusLabel.stringValue = Self.lastCheckedText(PreferencesManager.shared.lastUpdateCheckAt)
+        }
         stack.addArrangedSubview(updateStatusLabel)
 
         autoUpdateCheckbox.state = PreferencesManager.shared.autoUpdateCheckEnabled ? .on : .off
@@ -211,7 +219,9 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         updateIntervalPopup.target = self
         updateIntervalPopup.action = #selector(updateIntervalChanged)
         selectUpdateInterval()
-        updateIntervalPopup.isEnabled = PreferencesManager.shared.autoUpdateCheckEnabled
+        if !UpdateService.isLocalDevelopmentBuild() {
+            updateIntervalPopup.isEnabled = PreferencesManager.shared.autoUpdateCheckEnabled
+        }
         stack.addArrangedSubview(row([fixedLabel("Check", 50), updateIntervalPopup]))
 
         // Toggles
@@ -405,6 +415,10 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
             case .success(nil):
                 self.updateStatusLabel.stringValue = "Up to date. "
                     + Self.lastCheckedText(PreferencesManager.shared.lastUpdateCheckAt)
+            case .failure(let error as UpdateService.UpdateError) where error == .localDevelopmentBuild:
+                self.updateStatusLabel.stringValue = error.localizedDescription
+                    ?? "Local development build"
+                self.checkNowButton.isEnabled = false
             case .failure(let error):
                 self.updateStatusLabel.stringValue = "Check failed: \(error.localizedDescription)"
             }
