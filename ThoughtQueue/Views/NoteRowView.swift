@@ -25,16 +25,17 @@ final class NoteRowView: NSView {
 
     private func setup() {
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = Theme.radiusRow
 
         let titleLabel = NSTextField(labelWithString: note.title)
-        titleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        titleLabel.font = Theme.body(12.5, weight: .semibold)
+        titleLabel.textColor = Theme.textPrimary
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let catLabel = NSTextField(labelWithString: note.categoryDisplay)
-        catLabel.font = .systemFont(ofSize: 11)
-        catLabel.textColor = .secondaryLabelColor
+        catLabel.font = Theme.body(10, weight: .semibold)
+        catLabel.textColor = Theme.accentBorder
         catLabel.lineBreakMode = .byTruncatingTail
         catLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -43,7 +44,7 @@ final class NoteRowView: NSView {
         let copyNoteBtn = makeIconButton("doc.on.doc", tip: "Copy note", action: #selector(copyNote))
         let copyPathBtn = makeIconButton("folder", tip: "Copy path", action: #selector(copyPath))
         let deleteBtn = makeIconButton("trash", tip: "Delete", action: #selector(confirmDelete))
-        deleteBtn.contentTintColor = .systemRed
+        deleteBtn.contentTintColor = Theme.danger
 
         let actions = NSStackView(views: [openBtn, cloneBtn, copyNoteBtn, copyPathBtn, deleteBtn])
         actions.orientation = .horizontal
@@ -84,6 +85,16 @@ final class NoteRowView: NSView {
     override func mouseEntered(with event: NSEvent) { hovering = true }
     override func mouseExited(with event: NSEvent) { hovering = false }
 
+    /// Recompute hover directly from the current mouse position. AppKit only updates tracking
+    /// areas on actual mouse movement, so scrolling a row out from under a stationary cursor
+    /// never fires `mouseExited` on its own — the popover calls this on every scroll tick to
+    /// clear hover state that would otherwise stay stuck.
+    func refreshHoverState() {
+        guard let window else { hovering = false; return }
+        let mouseInView = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        hovering = bounds.contains(mouseInView)
+    }
+
     /// Clicking the row body (anywhere the action buttons don't intercept) opens the
     /// note in its own view/edit window and dismisses the popover. Close the popover
     /// first so dismissal does not steal activation back from the note window.
@@ -95,9 +106,7 @@ final class NoteRowView: NSView {
     override var wantsUpdateLayer: Bool { true }
 
     override func updateLayer() {
-        layer?.backgroundColor = hovering
-            ? NSColor.labelColor.withAlphaComponent(0.07).cgColor
-            : NSColor.clear.cgColor
+        layer?.backgroundColor = hovering ? Theme.hoverRow.cgColor : NSColor.clear.cgColor
     }
 
     /// Build an action button whose clickable area is a padded 28×28 box centered on the icon,
@@ -110,6 +119,7 @@ final class NoteRowView: NSView {
         btn.imageScaling = .scaleProportionallyDown
         btn.bezelStyle = .inline
         btn.isBordered = false
+        btn.contentTintColor = Theme.iconStroke
         btn.toolTip = tip
         btn.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([

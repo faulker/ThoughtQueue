@@ -20,6 +20,13 @@ final class PopoverController: NSObject, NSPopoverDelegate {
         if popover.isShown {
             popover.close()
         } else {
+            // A status-item popover otherwise inherits the appearance of the menu bar's own
+            // (dark) window rather than the app's chosen theme, leaving it stuck dark regardless
+            // of the Light/Dark/System preference. `NSApp.effectiveAppearance` already reflects
+            // that preference (`PreferencesManager.applyThemeMode` keeps it in sync), so force
+            // the popover to match it explicitly, freshly on every open in case the theme
+            // changed since the last time it was shown.
+            popover.appearance = NSApp.effectiveAppearance
             viewController.reload()
             popover.show(relativeTo: rect, of: view, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
@@ -53,41 +60,30 @@ final class PopoverController: NSObject, NSPopoverDelegate {
     }
 }
 
-final class PopoverViewController: NSViewController, NSSearchFieldDelegate {
+final class PopoverViewController: NSViewController {
     var onRequestClose: (() -> Void)?
 
-    private var searchField: NSSearchField!
+    private var searchField: ThemedSearchField!
     private var stackView: NSStackView!
     private var allNotes: [Note] = []
     private var filtered: [Note] = []
     private var reloadWorkItem: DispatchWorkItem?
 
     override func loadView() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 440))
+        let container = ThemedSurfaceView(frame: NSRect(x: 0, y: 0, width: 380, height: 440))
 
-        let addButton = NSButton(title: "+ Add Note", target: self, action: #selector(addNote))
-        addButton.bezelStyle = .rounded
-        addButton.controlSize = .large
-        addButton.font = .systemFont(ofSize: 13, weight: .medium)
-        addButton.translatesAutoresizingMaskIntoConstraints = false
+        let addButton = ThemedButton(title: "+ Add", prominent: true, target: self, action: #selector(addNote))
         container.addSubview(addButton)
-
-        let openButton = NSButton(title: "Open", target: self, action: #selector(openMainWindow))
-        openButton.bezelStyle = .rounded
-        openButton.controlSize = .large
-        openButton.font = .systemFont(ofSize: 13, weight: .medium)
-        openButton.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(openButton)
 
         let separator = NSBox()
         separator.boxType = .separator
         separator.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(separator)
 
-        searchField = NSSearchField()
+        searchField = ThemedSearchField()
         searchField.placeholderString = "Search notes\u{2026}"
         searchField.translatesAutoresizingMaskIntoConstraints = false
-        searchField.delegate = self
+        searchField.onChange = { [weak self] _ in self?.applyFilter() }
         container.addSubview(searchField)
 
         stackView = NSStackView()
@@ -116,6 +112,13 @@ final class PopoverViewController: NSViewController, NSSearchFieldDelegate {
         container.addSubview(scrollView)
         flip.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor).isActive = true
 
+        // Rows scrolling out from under a stationary cursor don't get a mouseExited on their
+        // own (AppKit only updates tracking areas on actual mouse movement), which otherwise
+        // leaves their hover highlight stuck. Recompute it directly on every scroll tick.
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(scrollViewDidScroll), name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+
         NSLayoutConstraint.activate([
             searchField.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
             searchField.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
@@ -131,14 +134,9 @@ final class PopoverViewController: NSViewController, NSSearchFieldDelegate {
             separator.bottomAnchor.constraint(equalTo: addButton.topAnchor, constant: -10),
 
             addButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            addButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
             addButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10),
             addButton.heightAnchor.constraint(equalToConstant: 32),
-
-            openButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            openButton.centerYAnchor.constraint(equalTo: addButton.centerYAnchor),
-            openButton.heightAnchor.constraint(equalTo: addButton.heightAnchor),
-            openButton.leadingAnchor.constraint(equalTo: addButton.trailingAnchor, constant: 8),
-            openButton.widthAnchor.constraint(equalTo: addButton.widthAnchor),
         ])
 
         self.view = container
@@ -163,8 +161,10 @@ final class PopoverViewController: NSViewController, NSSearchFieldDelegate {
         applyFilter()
     }
 
-    func controlTextDidChange(_ obj: Notification) {
-        applyFilter()
+    @objc private func scrollViewDidScroll() {
+        for case let row as NoteRowView in stackView.arrangedSubviews {
+            row.refreshHoverState()
+        }
     }
 
     private func applyFilter() {
@@ -178,8 +178,8 @@ final class PopoverViewController: NSViewController, NSSearchFieldDelegate {
 
         if filtered.isEmpty {
             let empty = NSTextField(labelWithString: allNotes.isEmpty ? "No notes yet." : "No matches.")
-            empty.font = .systemFont(ofSize: 13)
-            empty.textColor = .secondaryLabelColor
+            empty.font = Theme.body(13)
+            empty.textColor = Theme.textSecondary
             empty.alignment = .center
             stackView.addArrangedSubview(empty)
             return
@@ -194,12 +194,6 @@ final class PopoverViewController: NSViewController, NSSearchFieldDelegate {
     @objc private func addNote() {
         onRequestClose?()
         NoteWindowController.showNew()
-    }
-
-    @objc private func openMainWindow() {
-        onRequestClose?()
-        MainWindowController.shared.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 }
 

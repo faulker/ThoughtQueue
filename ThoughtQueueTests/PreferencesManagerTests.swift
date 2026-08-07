@@ -148,4 +148,22 @@ final class PreferencesManagerTests: XCTestCase {
         // Device-local: another Mac's check time says nothing about this one.
         XCTAssertFalse(PreferencesManager.syncableKeys.contains("lastUpdateCheckAt"))
     }
+
+    func testThemeModeDefaultsToSystemAndRoundTrips() {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: "themeMode")
+        defer { defaults.set(saved, forKey: "themeMode") }
+        defaults.removeObject(forKey: "themeMode")
+
+        XCTAssertEqual(PreferencesManager.shared.themeMode, .system)
+
+        PreferencesManager.shared.themeMode = .dark
+        XCTAssertEqual(PreferencesManager.shared.themeMode, .dark)
+        PreferencesManager.shared.themeMode = .light
+        XCTAssertEqual(PreferencesManager.shared.themeMode, .light)
+    }
+
+    func testThemeModeIsSyncable() {
+        XCTAssertTrue(PreferencesManager.syncableKeys.contains("themeMode"))
+    }
 }

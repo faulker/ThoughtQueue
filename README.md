@@ -11,7 +11,7 @@ You're reading something, debugging code, or thinking out loud and want to jot i
 - **Global hotkeys** -- capture selected text from any app without switching windows
 - **Quick capture** -- one shortcut saves instantly, no interruption
 - **Detailed capture** -- a second shortcut opens the note editor pre-filled with the selection so you can adjust it before saving
-- **Add note** -- write a note from scratch via the `+ Add Note` button in the popover or main window
+- **Add note** -- write a note from scratch via the `+ Add` button in the menu bar popover
 - **Note editor** -- a single window per note with a view/edit toggle: markdown renders by default, click or start typing to edit the raw text, with autosave and full undo/redo (Cmd+Z / Cmd+Shift+Z)
 - **Navigation panel** -- the note window has a collapsible panel on the left listing every note grouped by category, with a search field. Hidden by default; the sidebar button in the header (or Ctrl+Cmd+S) reveals it, and picking a note switches the window over to it
 - **Copy, don't just open** -- one click to copy a note's full body or its file path straight to the clipboard, right from its row
@@ -43,7 +43,7 @@ The collapsible sidebar lists every note grouped by category, with search:
 <img src="screenshots/sidebar.png" alt="Note window with the navigation sidebar open" width="600">
 
 ### Preferences
-Configure hotkeys, "Open With" destinations, fonts, auto-update intervals, and more:
+Configure appearance, hotkeys, "Open With" destinations, fonts, auto-update intervals, and more:
 
 <img src="screenshots/preferences.png" alt="Preferences window" width="400">
 
@@ -165,13 +165,13 @@ On first launch, ThoughtQueue appears in your menu bar with a `"` icon. macOS wi
 | Quick capture | `Cmd+Shift+B` | Saves selected text instantly (to the working document if one is set, otherwise a new note) |
 | Detailed capture | `Cmd+Shift+Option+B` | Opens the note editor pre-filled with the selection so you can adjust text and category before saving |
 
-Select text in any app, hit the shortcut, and keep working. A toast confirms the capture. Use the `+ Add Note` button in the menu-bar popover or the main window to start a note from scratch instead.
+Select text in any app, hit the shortcut, and keep working. A toast confirms the capture. Use the `+ Add` button in the menu-bar popover to start a note from scratch instead.
 
 ### Manage your notes
 
 - **Left-click** the menu bar icon to open a popover with a searchable notes list and quick actions on each row (Open with, Clone note, Copy note, Copy path, Delete)
-- **Double-click** the menu bar icon to open your working document. Set one first by right-clicking a note in the full management window and picking **Set as Working Document**
-- **Right-click** the menu bar icon for the full management window, preferences, or to quit
+- **Double-click** the menu bar icon to open your working document. Set one first by right-clicking a note in the note window's navigation panel and picking **Set as Working Document**
+- **Right-click** the menu bar icon for Categories, Preferences, or Quit
 
 ### Copy a note
 
@@ -192,7 +192,7 @@ Every note opens in a single view/edit window. It opens read-only with markdown 
 
 ### Organize with categories
 
-Create categories from the sidebar in the full management window. To move a note into a different category, use the category dropdown in the note's detail pane (or its own window), right-click a note in the list and pick **Move to Category**, or use the tag button on a note row in the menu bar dropdown. Each of those also offers **New Category** to create and move in one step.
+Open **Categories…** from the menu bar icon's right-click menu to add, rename, or delete category folders (deleting moves notes to Uncategorized). To move a note into a different category, use the category dropdown in the note window; it also offers **New Category** to create and move in one step.
 
 ### Change hotkeys
 

@@ -138,4 +138,55 @@ final class NoteStoreTests: XCTestCase {
         let note = try XCTUnwrap(Note.from(url: url, storeRoot: tempRoot))
         XCTAssertEqual(note.category, "Projects")
     }
+
+    func testRenameCategoryMovesFolderAndNotes() throws {
+        let note = try XCTUnwrap(store.createNote(title: "Task", body: "x", category: "Old"))
+        XCTAssertTrue(store.renameCategory("Old", to: "New"))
+        XCTAssertEqual(store.categories(), ["New"])
+        XCTAssertTrue(store.notes(in: "Old").isEmpty)
+        let moved = try XCTUnwrap(store.notes(in: "New").first)
+        XCTAssertEqual(moved.title, note.title)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: note.url.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: moved.url.path))
+    }
+
+    func testRenameCategoryRejectsCollision() throws {
+        XCTAssertTrue(store.createCategory("Alpha"))
+        XCTAssertTrue(store.createCategory("Beta"))
+        XCTAssertFalse(store.renameCategory("Alpha", to: "Beta"))
+        XCTAssertEqual(store.categories(), ["Alpha", "Beta"])
+    }
+
+    func testRenameCategoryRejectsInvalidNames() {
+        XCTAssertTrue(store.createCategory("Keep"))
+        XCTAssertFalse(store.renameCategory("Keep", to: ".."))
+        XCTAssertFalse(store.renameCategory("Keep", to: "Uncategorized"))
+        XCTAssertEqual(store.categories(), ["Keep"])
+    }
+
+    func testDeleteCategoryMovesNotesToUncategorized() throws {
+        let note = try XCTUnwrap(store.createNote(title: "KeepMe", body: "body", category: "Temp"))
+        XCTAssertTrue(store.deleteCategory("Temp"))
+        XCTAssertFalse(store.categories().contains("Temp"))
+        let remaining = try XCTUnwrap(store.notes(in: nil).first)
+        XCTAssertEqual(remaining.title, note.title)
+        XCTAssertNil(remaining.category)
+        XCTAssertEqual(store.body(of: remaining), "body")
+    }
+
+    func testDeleteEmptyCategory() {
+        XCTAssertTrue(store.createCategory("Empty"))
+        XCTAssertTrue(store.deleteCategory("Empty"))
+        XCTAssertFalse(store.categories().contains("Empty"))
+    }
+
+    func testRenameCategoryRemapsWorkingDocument() throws {
+        let note = try XCTUnwrap(store.createNote(title: "Sink", body: "x", category: "Inbox"))
+        PreferencesManager.shared.workingDocumentURL = note.url
+        XCTAssertTrue(store.renameCategory("Inbox", to: "Active"))
+        let working = try XCTUnwrap(PreferencesManager.shared.workingDocumentURL)
+        XCTAssertTrue(working.path.contains("/Active/"))
+        XCTAssertEqual(store.workingDocumentNote?.title, "sink")
+        PreferencesManager.shared.workingDocumentURL = nil
+    }
 }

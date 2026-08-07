@@ -24,6 +24,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     private let clickBehaviorPopup = NSPopUpButton()
     private let noteEditModePopup = NSPopUpButton()
     private let editorFontLabel = NSTextField(labelWithString: "")
+    private let themeToggle = SegmentedPillControl(titles: ["Dark", "Light", "System"])
     private let timeoutField = NSTextField()
     private let openWithTable = NSTableView()
     private let updateVersionLabel = NSTextField(labelWithString: "")
@@ -54,14 +55,16 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     }
 
     private func setupUI() {
-        guard let content = window?.contentView else { return }
+        let content = ThemedSurfaceView(frame: .zero)
+        window?.contentView = content
 
         // The sections total more than fits in a comfortably sized window, so everything lives in
         // a scroll view. Without it the bottom controls would be unreachable on a short display.
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
-        scroll.drawsBackground = false
+        scroll.drawsBackground = true
+        scroll.backgroundColor = Theme.surface
         scroll.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(scroll)
         NSLayoutConstraint.activate([
@@ -96,11 +99,19 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
             stack.bottomAnchor.constraint(equalTo: documentView.bottomAnchor, constant: -20),
         ])
 
+        // Appearance
+        stack.addArrangedSubview(sectionLabel("Appearance"))
+        themeToggle.select(themeToggleIndex(for: PreferencesManager.shared.themeMode))
+        themeToggle.onSelect = { index in
+            PreferencesManager.shared.themeMode = [.dark, .light, .system][index]
+        }
+        stack.addArrangedSubview(themeToggle)
+
         // Store location
         stack.addArrangedSubview(sectionLabel("Store Folder"))
         storePathLabel.stringValue = PreferencesManager.shared.storeURL?.path ?? "(not set)"
-        storePathLabel.font = .systemFont(ofSize: 12)
-        storePathLabel.textColor = .secondaryLabelColor
+        storePathLabel.font = Theme.body(12)
+        storePathLabel.textColor = Theme.textSecondary
         storePathLabel.lineBreakMode = .byTruncatingMiddle
         let chooseBtn = NSButton(title: "Choose\u{2026}", target: self, action: #selector(chooseStore))
         chooseBtn.bezelStyle = .rounded
@@ -124,8 +135,8 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
 
         // Note editor font
         stack.addArrangedSubview(sectionLabel("Note editor font"))
-        editorFontLabel.font = .systemFont(ofSize: 12)
-        editorFontLabel.textColor = .secondaryLabelColor
+        editorFontLabel.font = Theme.body(12)
+        editorFontLabel.textColor = Theme.textSecondary
         editorFontLabel.lineBreakMode = .byTruncatingMiddle
         updateEditorFontLabel()
         let selectFontBtn = NSButton(title: "Select Font\u{2026}", target: self, action: #selector(selectFont))
@@ -186,15 +197,15 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         // Updates
         stack.addArrangedSubview(sectionLabel("Updates"))
         updateVersionLabel.stringValue = "ThoughtQueue \(UpdateService.currentVersion())"
-        updateVersionLabel.font = .systemFont(ofSize: 12)
-        updateVersionLabel.textColor = .secondaryLabelColor
+        updateVersionLabel.font = Theme.body(12)
+        updateVersionLabel.textColor = Theme.textSecondary
         checkNowButton.bezelStyle = .rounded
         checkNowButton.target = self
         checkNowButton.action = #selector(checkNow)
         stack.addArrangedSubview(row([updateVersionLabel, checkNowButton]))
 
-        updateStatusLabel.font = .systemFont(ofSize: 12)
-        updateStatusLabel.textColor = .secondaryLabelColor
+        updateStatusLabel.font = Theme.body(12)
+        updateStatusLabel.textColor = Theme.textSecondary
         updateStatusLabel.lineBreakMode = .byTruncatingTail
         // A network error message can be arbitrarily long; truncate rather than stretch the
         // fixed-width window.
@@ -225,6 +236,10 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         stack.addArrangedSubview(row([fixedLabel("Check", 50), updateIntervalPopup]))
 
         // Toggles
+        for checkbox in [autoIntelCheckbox, alwaysOnTopCheckbox, syncSettingsCheckbox, startAtLoginCheckbox, autoUpdateCheckbox] {
+            checkbox.font = Theme.body(12.5)
+        }
+
         autoIntelCheckbox.state = PreferencesManager.shared.autoIntelEnabled ? .on : .off
         autoIntelCheckbox.target = self
         autoIntelCheckbox.action = #selector(autoIntelToggled)
@@ -248,15 +263,18 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
 
     // MARK: - Layout helpers
 
+    /// Small-caps section header, matching the design's "HOTKEYS"-style subsection labels.
     private func sectionLabel(_ text: String) -> NSTextField {
-        let l = NSTextField(labelWithString: text)
-        l.font = .systemFont(ofSize: 13, weight: .semibold)
+        let l = NSTextField(labelWithString: text.uppercased())
+        l.font = Theme.body(10.5, weight: .semibold)
+        l.textColor = Theme.accentBorder
         return l
     }
 
     private func fixedLabel(_ text: String, _ width: CGFloat) -> NSTextField {
         let l = NSTextField(labelWithString: text)
-        l.font = .systemFont(ofSize: 13)
+        l.font = Theme.body(13)
+        l.textColor = Theme.textPrimary
         l.translatesAutoresizingMaskIntoConstraints = false
         l.widthAnchor.constraint(equalToConstant: width).isActive = true
         return l
@@ -276,6 +294,15 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         formatter.dateStyle = Calendar.current.isDateInToday(date) ? .none : .short
         formatter.timeStyle = .short
         return "Last checked \(formatter.string(from: date))"
+    }
+
+    /// `themeToggle`'s segment order is Dark/Light/System; map the stored preference onto it.
+    private func themeToggleIndex(for mode: ThemeMode) -> Int {
+        switch mode {
+        case .dark: return 0
+        case .light: return 1
+        case .system: return 2
+        }
     }
 
     private func selectUpdateInterval() {
@@ -643,7 +670,6 @@ final class ShortcutRecorderView: NSView {
     private func setup() {
         wantsLayer = true
         layer?.borderWidth = 1
-        layer?.borderColor = NSColor.separatorColor.cgColor
         layer?.cornerRadius = 4
         label.font = .systemFont(ofSize: 12)
         label.alignment = .center
@@ -656,14 +682,18 @@ final class ShortcutRecorderView: NSView {
         updateDisplay()
     }
 
+    override var wantsUpdateLayer: Bool { true }
+
+    /// Re-resolves the border `cgColor` whenever AppKit needs the layer redrawn, including on an
+    /// appearance change (see `ThemedSurfaceView`), instead of the recording-state color going
+    /// stale after a theme switch.
+    override func updateLayer() {
+        layer?.borderColor = (isRecording ? NSColor.controlAccentColor : NSColor.separatorColor).cgColor
+    }
+
     private func updateDisplay() {
-        if isRecording {
-            label.stringValue = "Press shortcut\u{2026}"
-            layer?.borderColor = NSColor.controlAccentColor.cgColor
-        } else {
-            label.stringValue = describe(keyBinding)
-            layer?.borderColor = NSColor.separatorColor.cgColor
-        }
+        label.stringValue = isRecording ? "Press shortcut\u{2026}" : describe(keyBinding)
+        needsDisplay = true
     }
 
     override func mouseDown(with event: NSEvent) {

@@ -16,7 +16,12 @@ targets:
     type: application
     platform: macOS
     sources:
-      - ThoughtQueue
+      - path: ThoughtQueue
+        excludes:
+          - Resources/Fonts/**
+      - path: ThoughtQueue/Resources/Fonts
+        type: folder
+        buildPhase: resources
     settings:
       base:
         INFOPLIST_FILE: ThoughtQueue/Info.plist

@@ -15,6 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         log.info("ThoughtQueue launching")
 
+        // Apply a stored light/dark override before any window is created (a no-op for the
+        // default "system" mode, since NSApp.appearance already starts nil).
+        PreferencesManager.applyThemeMode(PreferencesManager.shared.themeMode)
+
         // Show button/icon tooltips almost immediately instead of after the ~1s default (fix #4).
         UserDefaults.standard.set(150, forKey: "NSInitialToolTipDelay")
 
@@ -274,7 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showContextMenu() {
         guard let statusItem = statusItem else { return }
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Open ThoughtQueue", action: #selector(openMainWindow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Categories\u{2026}", action: #selector(openCategoryManager), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Preferences\u{2026}", action: #selector(openPreferences), keyEquivalent: ","))
         menu.addItem(NSMenuItem.separator())
@@ -284,8 +288,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = nil
     }
 
-    @objc private func openMainWindow() {
-        MainWindowController.shared.showWindow(nil)
+    @objc private func openCategoryManager() {
+        CategoryManagerWindowController.shared.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 

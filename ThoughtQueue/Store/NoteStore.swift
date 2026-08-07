@@ -401,6 +401,99 @@ final class NoteStore {
         return ok
     }
 
+    /// Rename a category folder. Fails when either name sanitizes away, the source is missing,
+    /// or a folder already exists at the destination. Remaps the working-document path when it
+    /// lived under the old folder.
+    @discardableResult
+    func renameCategory(_ oldName: String, to newName: String) -> Bool {
+        guard let root = requireRoot() else { return false }
+        guard let oldSafe = Self.sanitizeCategory(oldName),
+              let newSafe = Self.sanitizeCategory(newName) else { return false }
+        if oldSafe == newSafe { return true }
+
+        let oldFolder = root.appendingPathComponent(oldSafe, isDirectory: true)
+        let newFolder = root.appendingPathComponent(newSafe, isDirectory: true)
+        guard fm.fileExists(atPath: oldFolder.path) else {
+            log.warning("renameCategory source missing: \(oldFolder.path)")
+            return false
+        }
+        guard !fm.fileExists(atPath: newFolder.path) else {
+            log.warning("renameCategory destination exists: \(newFolder.path)")
+            return false
+        }
+
+        registerSelfWrite(oldFolder)
+        registerSelfWrite(newFolder)
+        do {
+            try fm.moveItem(at: oldFolder, to: newFolder)
+        } catch {
+            log.error("renameCategory failed: \(error.localizedDescription)")
+            return false
+        }
+        remapWorkingDocumentIfUnder(oldFolder: oldFolder, newFolder: newFolder)
+        postChange()
+        return true
+    }
+
+    /// Delete a category folder. Notes inside are moved to Uncategorized (store root) first so
+    /// nothing is lost; the empty folder (and any leftover nested dirs) is then removed.
+    /// Remaps the working-document path when a moved note was the working document.
+    @discardableResult
+    func deleteCategory(_ name: String) -> Bool {
+        guard let root = requireRoot() else { return false }
+        guard let safe = Self.sanitizeCategory(name) else { return false }
+        let folder = root.appendingPathComponent(safe, isDirectory: true)
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: folder.path, isDirectory: &isDir), isDir.boolValue else {
+            log.warning("deleteCategory missing: \(folder.path)")
+            return false
+        }
+
+        for note in notes(in: safe) {
+            let dest = uniqueURL(stem: note.url.deletingPathExtension().lastPathComponent, in: root)
+            registerSelfWrite(note.url)
+            registerSelfWrite(dest)
+            do {
+                try fm.moveItem(at: note.url, to: dest)
+                remapWorkingDocument(from: note.url, to: dest)
+            } catch {
+                log.error("deleteCategory move failed: \(error.localizedDescription)")
+                postChange()
+                return false
+            }
+        }
+
+        registerSelfWrite(folder)
+        do {
+            try fm.removeItem(at: folder)
+        } catch {
+            log.error("deleteCategory remove failed: \(error.localizedDescription)")
+            postChange()
+            return false
+        }
+        postChange()
+        return true
+    }
+
+    /// If the working document is `oldURL`, point it at `newURL` instead.
+    private func remapWorkingDocument(from oldURL: URL, to newURL: URL) {
+        guard let working = PreferencesManager.shared.workingDocumentURL,
+              working.standardizedFileURL == oldURL.standardizedFileURL else { return }
+        PreferencesManager.shared.workingDocumentURL = newURL
+    }
+
+    /// If the working document lives under `oldFolder`, rewrite its path under `newFolder`.
+    private func remapWorkingDocumentIfUnder(oldFolder: URL, newFolder: URL) {
+        guard let working = PreferencesManager.shared.workingDocumentURL else { return }
+        let oldPath = oldFolder.standardizedFileURL.path
+        let workingPath = working.standardizedFileURL.path
+        guard workingPath == oldPath || workingPath.hasPrefix(oldPath + "/") else { return }
+        let suffix = String(workingPath.dropFirst(oldPath.count))
+        PreferencesManager.shared.workingDocumentURL = URL(
+            fileURLWithPath: newFolder.standardizedFileURL.path + suffix
+        )
+    }
+
     // MARK: - Notifications
 
     private func postChange() {

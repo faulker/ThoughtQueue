@@ -48,16 +48,18 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
     private var query = ""
 
     private static let groupRowHeight: CGFloat = 24
-    private static let noteRowHeight: CGFloat = 40
+    private static let noteRowHeight: CGFloat = 26
 
     override func loadView() {
         let width = PreferencesManager.shared.noteNavigatorWidth
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 520))
+        let container = ThemedSurfaceView(frame: NSRect(x: 0, y: 0, width: width, height: 520))
 
         searchField.placeholderString = "Search notes"
         searchField.delegate = self
         searchField.sendsWholeSearchString = false
         searchField.sendsSearchStringImmediately = true
+        // Deliberately not themed: a custom font throws off NSSearchFieldCell's vertical
+        // centering, which assumes system font metrics at this control size.
         searchField.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(searchField)
 
@@ -65,8 +67,8 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
         scrollView.documentView = outlineView
         scrollView.hasVerticalScroller = true
         scrollView.translatesAutoresizingMaskIntoConstraints = false
-        // Clear backgrounds let the split view item's sidebar material show through.
-        scrollView.drawsBackground = false
+        scrollView.drawsBackground = true
+        scrollView.backgroundColor = Theme.surface
         container.addSubview(scrollView)
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("note"))
@@ -76,10 +78,14 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
         outlineView.dataSource = self
         outlineView.delegate = self
         outlineView.style = .sourceList
-        outlineView.backgroundColor = .clear
+        outlineView.backgroundColor = Theme.surface
         outlineView.floatsGroupRows = false
         outlineView.indentationPerLevel = 12
         outlineView.autoresizesOutlineColumn = false
+
+        let menu = NSMenu()
+        menu.delegate = self
+        outlineView.menu = menu
 
         NSLayoutConstraint.activate([
             searchField.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
@@ -245,11 +251,11 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
         return groupRow(named: node.category ?? "")
     }
 
-    /// A category header row: small caps-ish label in the source-list style.
+    /// A category header row: small caps label in the design's sage accent.
     private func groupRow(named name: String) -> NSView {
-        let label = NSTextField(labelWithString: name)
-        label.font = .systemFont(ofSize: 11, weight: .semibold)
-        label.textColor = .secondaryLabelColor
+        let label = NSTextField(labelWithString: name.uppercased())
+        label.font = Theme.body(10.5, weight: .semibold)
+        label.textColor = Theme.accentBorder
         label.lineBreakMode = .byTruncatingTail
 
         let stack = NSStackView(views: [label])
@@ -258,11 +264,13 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
         return stack
     }
 
-    /// A note row: title (with a working-document badge) over its category, matching the main
-    /// window's notes list.
+    /// A note row: just the title (with a working-document badge). The category is already the
+    /// group header above it, so repeating it per-row is redundant here (unlike the popover/main
+    /// window lists, which show notes across every category at once).
     private func noteRow(for note: Note) -> NSView {
         let title = NSTextField(labelWithString: note.title)
-        title.font = .systemFont(ofSize: 13, weight: .medium)
+        title.font = Theme.body(13, weight: .medium)
+        title.textColor = Theme.textPrimary
         title.lineBreakMode = .byTruncatingTail
 
         let titleRow = NSStackView(views: [title])
@@ -271,29 +279,40 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
         if isWorkingDocument(note) {
             let icon = NSImageView()
             icon.image = NSImage(systemSymbolName: "tray.and.arrow.down.fill", accessibilityDescription: "Working document")
-            icon.contentTintColor = .controlAccentColor
+            icon.contentTintColor = Theme.accent
             icon.toolTip = "Working document (default capture target)"
             icon.setContentHuggingPriority(.required, for: .horizontal)
             titleRow.addArrangedSubview(icon)
         }
 
-        let subtitle = NSTextField(labelWithString: note.categoryDisplay)
-        subtitle.font = .systemFont(ofSize: 11)
-        subtitle.textColor = .secondaryLabelColor
-        subtitle.lineBreakMode = .byTruncatingTail
-
-        let stack = NSStackView(views: [titleRow, subtitle])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 1
-        stack.edgeInsets = NSEdgeInsets(top: 3, left: 4, bottom: 3, right: 6)
-        return stack
+        titleRow.edgeInsets = NSEdgeInsets(top: 3, left: 4, bottom: 3, right: 6)
+        return titleRow
     }
 
     /// Whether `note` is the configured working document (default capture target).
     private func isWorkingDocument(_ note: Note) -> Bool {
         guard let working = PreferencesManager.shared.workingDocumentURL else { return false }
         return working.standardizedFileURL == note.url.standardizedFileURL
+    }
+
+    /// The note under the right-click (or nil when the click landed on a group / empty area).
+    private func clickedNote() -> Note? {
+        let row = outlineView.clickedRow
+        guard row >= 0, let node = outlineView.item(atRow: row) as? NoteNavigatorNode else { return nil }
+        return node.note
+    }
+
+    /// Designate the clicked note as the working document (default quick-capture sink).
+    @objc private func setWorkingDoc() {
+        guard let note = clickedNote() else { return }
+        PreferencesManager.shared.workingDocumentURL = note.url
+        ToastWindow.show(message: "Working doc: \(note.title)")
+    }
+
+    /// Clear the working-document preference.
+    @objc private func unsetWorkingDoc() {
+        PreferencesManager.shared.workingDocumentURL = nil
+        ToastWindow.show(message: "Working doc cleared")
     }
 
     // MARK: - Expansion tracking
@@ -308,5 +327,20 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
         guard !isProgrammatic, let node = notification.userInfo?["NSObject"] as? NoteNavigatorNode,
               let name = node.category else { return }
         collapsedGroups.remove(name)
+    }
+}
+
+extension NoteNavigatorViewController: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        guard let note = clickedNote() else { return }
+        let working: NSMenuItem
+        if isWorkingDocument(note) {
+            working = NSMenuItem(title: "Unset Working Document", action: #selector(unsetWorkingDoc), keyEquivalent: "")
+        } else {
+            working = NSMenuItem(title: "Set as Working Document", action: #selector(setWorkingDoc), keyEquivalent: "")
+        }
+        working.target = self
+        menu.addItem(working)
     }
 }

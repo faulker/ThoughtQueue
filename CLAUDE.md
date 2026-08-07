@@ -43,12 +43,20 @@ Releases are built by `.github/workflows/release.yml` (tag push `v*` or manual r
 
 ### UI layers
 
-- **Left-click menu bar icon**: `PopoverController` shows collapsible categories with entry previews and quick actions
+- **Left-click menu bar icon**: `PopoverController` shows searchable note rows with quick actions and "+ Add"
 - **Double-click menu bar icon**: Opens the working document in a note window (`AppDelegate.statusItemAction` routes on `NSEvent.clickCount`; the first click still opens the popover, the second dismisses it)
-- **Right-click menu bar icon**: Context menu with "Open ThoughtQueue" (full window), Preferences, Quit
-- **MainWindowController**: NSSplitViewController with category sidebar + entries table + "Clear Completed"
+- **Right-click menu bar icon**: Context menu with Categories, Preferences, Quit
+- **CategoryManagerWindowController**: Singleton window for adding, renaming, and deleting category folders (delete moves notes to Uncategorized). Opened from the right-click menu.
 - **NoteWindowController**: The single note window for creating, viewing, and editing a note (inline editable title + category dropdown, view/edit toggle). Used by "+ Add Note" and detailed capture alike. Its content is an `NSSplitViewController`: `NoteNavigatorViewController` in a collapsible sidebar item (hidden by default, toggled from the header or Ctrl+Cmd+S) plus `NoteEditorViewController`. Reach the editor from a window via `NSWindow.noteEditor`.
-- **NoteNavigatorViewController**: The note window's navigation panel. Source-list outline of notes grouped by category with a fuzzy search field; selecting a note retargets the same window via `NoteEditorViewController.load(note:)`, unless that note already has its own window (which is focused via `NoteWindowController.focus`, including deminiaturize and `.moveToActiveSpace`).
+- **NoteNavigatorViewController**: The note window's navigation panel. Source-list outline of notes grouped by category with a fuzzy search field; selecting a note retargets the same window via `NoteEditorViewController.load(note:)`, unless that note already has its own window (which is focused via `NoteWindowController.focus`, including deminiaturize and `.moveToActiveSpace`). Right-click a note to set or unset the working document.
+
+### Visual design ("Organic" theme)
+
+`Theme.swift` is the single source of truth for the cream/sage light palette and its dark counterpart (every color is a light/dark `NSColor` pair via `NSColor(light:dark:)`, so it tracks system appearance automatically), plus the bundled Figtree body font (`Theme.body`) and Georgia accent font (`Theme.heading`). `ThemedControls.swift` holds the reusable custom-drawn controls built on those tokens: `ThemedButton` (filled/outlined pill buttons), `ThemedSearchField` (flat pill search input), `SegmentedPillControl` (two-way toggle, e.g. the editor font quick-picker). New UI should pull colors/fonts from `Theme` rather than system colors, except where a control's native chrome is left as-is deliberately (e.g. `NSPopUpButton`, native checkboxes, and `NoteNavigatorViewController`'s `NSSearchField`, which tests drive directly).
+
+Figtree ships in `ThoughtQueue/Resources/Fonts/Figtree.ttf` (a variable font; `Theme.body` addresses its named weight instances directly, e.g. `Figtree-SemiBold`) and is registered automatically via `ATSApplicationFontsPath` in Info.plist — no manual registration code needed.
+
+Appearance (Dark/Light/System) is a Preferences toggle backed by `PreferencesManager.themeMode`; its setter is the single place that pushes the choice onto `NSApp.appearance` (`PreferencesManager.applyThemeMode`), also called once at launch from `AppDelegate` to restore a non-default choice.
 
 ### Auto-update
 

@@ -347,6 +347,19 @@ final class ModeSwitchingTextView: NSTextView {
     }
 }
 
+/// An icon button with an on/off fill (used for the header's pin toggle): a soft accent wash
+/// when active, transparent otherwise. `wantsUpdateLayer`/`updateLayer()` (see
+/// `ThemedSurfaceView`) keeps that fill correct across light/dark appearance changes instead of
+/// a one-off `cgColor` write going stale.
+final class ToggleIconButton: NSButton {
+    var isActive = false { didSet { needsDisplay = true } }
+
+    override var wantsUpdateLayer: Bool { true }
+    override func updateLayer() {
+        layer?.backgroundColor = isActive ? Theme.accentSoftBackground.cgColor : NSColor.clear.cgColor
+    }
+}
+
 /// The view controller inside a `NoteWindowController`: an editable title field and a
 /// category dropdown inline in the header, above a text area that either renders markdown
 /// (view) or exposes the raw markdown for editing (edit). Title/category changes rename/move
@@ -380,7 +393,7 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     private var scrollView: NSScrollView!
     private var textView: ModeSwitchingTextView!
     private var toggleButton: NSButton!
-    private var pinButton: NSButton!
+    private var pinButton: ToggleIconButton!
 
     private var isEditing = false
     /// True when the raw text has unsaved changes since the last save/load.
@@ -408,7 +421,7 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     required init?(coder: NSCoder) { fatalError() }
 
     override func loadView() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 520))
+        let container = ThemedSurfaceView(frame: NSRect(x: 0, y: 0, width: 460, height: 520))
 
         // Reveals/hides the window's navigation panel. Leading edge of the header, where macOS
         // sidebar toggles live.
@@ -416,13 +429,16 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         navigatorButton.bezelStyle = .rounded
         navigatorButton.setButtonType(.pushOnPushOff)
         navigatorButton.imagePosition = .imageOnly
+        navigatorButton.contentTintColor = Theme.iconStroke
         navigatorButton.setContentHuggingPriority(.required, for: .horizontal)
         navigatorButton.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(navigatorButton)
         updateNavigatorButton()
 
+        // Monospaced to read as "this is the filename", matching the design.
         titleField = NSTextField(string: note.title)
-        titleField.font = .systemFont(ofSize: 15, weight: .semibold)
+        titleField.font = .monospacedSystemFont(ofSize: 15, weight: .bold)
+        titleField.textColor = Theme.textPrimary
         titleField.lineBreakMode = .byTruncatingTail
         titleField.isBordered = true
         titleField.isBezeled = true
@@ -445,9 +461,11 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
 
         // Per-session "keep on top" toggle. Defaults to the preference each time a note
         // opens; clicking flips only this window's float state.
-        pinButton = NSButton(title: "", target: self, action: #selector(togglePin))
+        pinButton = ToggleIconButton(title: "", target: self, action: #selector(togglePin))
         pinButton.bezelStyle = .rounded
         pinButton.imagePosition = .imageOnly
+        pinButton.wantsLayer = true
+        pinButton.layer?.cornerRadius = Theme.radiusSmall
         pinButton.setContentHuggingPriority(.required, for: .horizontal)
         pinButton.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(pinButton)
@@ -456,13 +474,16 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         toggleButton = NSButton(title: "", target: self, action: #selector(toggleMode))
         toggleButton.bezelStyle = .rounded
         toggleButton.imagePosition = .imageOnly
+        toggleButton.contentTintColor = Theme.iconStroke
         toggleButton.setContentHuggingPriority(.required, for: .horizontal)
         toggleButton.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(toggleButton)
 
         scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
-        scrollView.borderType = .bezelBorder
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = true
+        scrollView.backgroundColor = Theme.surface
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
         textView = ModeSwitchingTextView()
@@ -482,6 +503,8 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         textView.smartInsertDeleteEnabled = false
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
+        textView.drawsBackground = true
+        textView.backgroundColor = Theme.surface
         textView.textContainerInset = NSSize(width: 6, height: 6)
         textView.textContainer?.widthTracksTextView = true
         textView.autoresizingMask = [.width]
@@ -725,13 +748,16 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         navigatorButton.state = isNavigatorVisible ? .on : .off
     }
 
-    /// Reflect the current pinned state in the pin button's icon and tooltip.
+    /// Reflect the current pinned state in the pin button's icon, tooltip, and fill: a soft
+    /// sage wash when pinned, matching the design's active-toggle treatment.
     private func updatePinButton() {
         guard let pinButton else { return }
         let symbol = isPinned ? "pin.fill" : "pin"
         let tip = isPinned ? "Stop keeping on top" : "Keep on top"
         pinButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
         pinButton.toolTip = tip
+        pinButton.contentTintColor = isPinned ? Theme.accentBorder : Theme.iconStroke
+        pinButton.isActive = isPinned
     }
 
     /// Set the toggle button's icon/tooltip to reflect the action it performs next.

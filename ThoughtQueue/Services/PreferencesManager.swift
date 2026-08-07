@@ -29,6 +29,12 @@ enum ClickBehavior: String {
     case editRaw        // open a raw editor in-app
 }
 
+/// The app's appearance override. `system` (the default) just follows macOS; `light`/`dark`
+/// pin `NSApp.appearance` regardless of the system setting.
+enum ThemeMode: String {
+    case light, dark, system
+}
+
 /// How the note editor's body text box enters edit mode when a note opens.
 enum NoteEditMode: String {
     case doubleClick  // open in view mode; double-click (or type/paste) to edit
@@ -65,6 +71,7 @@ final class PreferencesManager {
         static let autoUpdateCheckEnabled = "autoUpdateCheckEnabled"
         static let updateCheckIntervalHours = "updateCheckIntervalHours"
         static let lastUpdateCheckAt = "lastUpdateCheckAt"
+        static let themeMode = "themeMode"
     }
 
     private init() {}
@@ -84,6 +91,7 @@ final class PreferencesManager {
         Keys.noteAlwaysOnTop, Keys.noteWindowWidth, Keys.noteWindowHeight,
         Keys.noteNavigatorWidth,
         Keys.autoUpdateCheckEnabled, Keys.updateCheckIntervalHours,
+        Keys.themeMode,
     ]
 
     /// Whether syncable settings are mirrored into the store folder so other devices pointed at
@@ -174,6 +182,31 @@ final class PreferencesManager {
         set {
             defaults.set(newValue?.path, forKey: Keys.workingDocPath)
             NotificationCenter.default.post(name: .notesDidChange, object: nil)
+        }
+    }
+
+    // MARK: - Appearance
+
+    /// The app's appearance override. `system` (the default) by setting `NSApp.appearance = nil`
+    /// on read, so the app just follows macOS unless the user pins light or dark. Applying it is
+    /// a side effect of the setter, both at launch and whenever Preferences changes it, so there
+    /// is exactly one place this ever needs calling from.
+    var themeMode: ThemeMode {
+        get { ThemeMode(rawValue: defaults.string(forKey: Keys.themeMode) ?? "") ?? .system }
+        set {
+            defaults.set(newValue.rawValue, forKey: Keys.themeMode)
+            Self.applyThemeMode(newValue)
+        }
+    }
+
+    /// Push `mode` onto the running app. Safe to call at any time, including at launch to apply
+    /// a previously-stored non-default preference (the default `.system` needs no action, since
+    /// `NSApp.appearance` already starts `nil`).
+    static func applyThemeMode(_ mode: ThemeMode) {
+        switch mode {
+        case .light: NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
+        case .system: NSApp.appearance = nil
         }
     }
 
