@@ -1,15 +1,34 @@
 import Cocoa
 
 /// A single note row used in the popover. Shows the title + category and offers quick
-/// actions: open-with, clone, copy note, copy path, and delete.
+/// actions: open-with, clone, copy note, copy path, and delete. Deleting confirms inline,
+/// inside the row itself, rather than throwing a modal dialog over the menu bar.
 final class NoteRowView: NSView {
+    /// How long the inline "Delete?" prompt stays up before it cancels itself.
+    private static let confirmTimeout: TimeInterval = 5
+
     private let note: Note
     private let onAction: () -> Void
     private var actionsStack: NSStackView!
+    private var confirmStack: NSStackView!
+    private var pendingCancel: DispatchWorkItem?
+
+    /// True while the row is showing its inline delete confirmation.
+    private(set) var isConfirmingDelete = false {
+        didSet {
+            guard isConfirmingDelete != oldValue else { return }
+            actionsStack.isHidden = isConfirmingDelete
+            confirmStack.isHidden = !isConfirmingDelete
+            updateActionAlpha()
+        }
+    }
+
     private var hovering = false {
         didSet {
             guard hovering != oldValue else { return }
-            actionsStack.animator().alphaValue = hovering ? 1 : 0
+            updateActionAlpha()
+            // Moving off the row abandons a pending confirmation rather than leaving it armed.
+            if !hovering { cancelDelete() }
             needsDisplay = true
         }
     }
@@ -53,12 +72,30 @@ final class NoteRowView: NSView {
         actions.alphaValue = 0 // revealed on hover
         actionsStack = actions
 
+        // The inline delete confirmation: takes the action strip's place in the row instead of
+        // opening a modal alert, which would pull focus away from the menu bar popover.
+        let confirmLabel = NSTextField(labelWithString: "Delete?")
+        confirmLabel.font = Theme.body(11, weight: .semibold)
+        confirmLabel.textColor = Theme.danger
+        let confirmBtn = makeIconButton("checkmark.circle.fill", tip: "Confirm delete", action: #selector(performDelete))
+        confirmBtn.contentTintColor = Theme.danger
+        let cancelBtn = makeIconButton("xmark.circle", tip: "Cancel", action: #selector(cancelDeleteAction))
+
+        let confirm = NSStackView(views: [confirmLabel, confirmBtn, cancelBtn])
+        confirm.orientation = .horizontal
+        confirm.spacing = 2
+        confirm.translatesAutoresizingMaskIntoConstraints = false
+        confirm.alphaValue = 0
+        confirm.isHidden = true
+        confirmStack = confirm
+
         addSubview(titleLabel)
         addSubview(catLabel)
         addSubview(actions)
+        addSubview(confirm)
 
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 44),
+            heightAnchor.constraint(equalToConstant: Theme.metric(44)),
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 4),
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: actions.leadingAnchor, constant: -8),
@@ -68,7 +105,19 @@ final class NoteRowView: NSView {
 
             actions.centerYAnchor.constraint(equalTo: centerYAnchor),
             actions.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+
+            confirm.centerYAnchor.constraint(equalTo: centerYAnchor),
+            confirm.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
         ])
+    }
+
+    deinit { pendingCancel?.cancel() }
+
+    /// Reveal whichever strip is current (actions, or the delete confirmation) on hover. The
+    /// confirmation stays visible regardless so it can't be armed invisibly.
+    private func updateActionAlpha() {
+        actionsStack.animator().alphaValue = (hovering && !isConfirmingDelete) ? 1 : 0
+        confirmStack.animator().alphaValue = isConfirmingDelete ? 1 : 0
     }
 
     /// Track mouse enter/exit so the row can highlight and reveal its action buttons.
@@ -99,6 +148,12 @@ final class NoteRowView: NSView {
     /// note in its own view/edit window and dismisses the popover. Close the popover
     /// first so dismissal does not steal activation back from the note window.
     override func mouseDown(with event: NSEvent) {
+        // While the delete confirmation is up, a click on the row body means "never mind",
+        // not "open this note".
+        if isConfirmingDelete {
+            cancelDelete()
+            return
+        }
         onAction()
         NoteWindowController.show(note: note)
     }
@@ -177,15 +232,32 @@ final class NoteRowView: NSView {
         ToastWindow.show(message: "Copied path")
     }
 
-    @objc private func confirmDelete() {
-        let alert = NSAlert()
-        alert.messageText = "Delete \"\(note.title)\"?"
-        alert.informativeText = "This permanently removes the file."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Delete")
-        alert.addButton(withTitle: "Cancel")
-        if alert.runModal() == .alertFirstButtonReturn {
-            _ = NoteStore.shared.delete(note)
+    /// First trash click: arm the inline confirmation and start its auto-cancel timer.
+    @objc func confirmDelete() {
+        isConfirmingDelete = true
+        pendingCancel?.cancel()
+        let timeout = DispatchWorkItem { [weak self] in self?.cancelDelete() }
+        pendingCancel = timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.confirmTimeout, execute: timeout)
+    }
+
+    /// Second click, on the checkmark: the note is gone for good.
+    @objc func performDelete() {
+        pendingCancel?.cancel()
+        pendingCancel = nil
+        isConfirmingDelete = false
+        if !NoteStore.shared.delete(note) {
+            ToastWindow.show(message: "Delete failed")
         }
+    }
+
+    @objc private func cancelDeleteAction() { cancelDelete() }
+
+    /// Drop a pending confirmation and return the row to its normal action strip.
+    func cancelDelete() {
+        guard isConfirmingDelete else { return }
+        pendingCancel?.cancel()
+        pendingCancel = nil
+        isConfirmingDelete = false
     }
 }

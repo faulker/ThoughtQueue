@@ -136,7 +136,7 @@ final class PopoverViewController: NSViewController {
             addButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
             addButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
             addButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10),
-            addButton.heightAnchor.constraint(equalToConstant: 32),
+            addButton.heightAnchor.constraint(equalToConstant: Theme.metric(32)),
         ])
 
         self.view = container

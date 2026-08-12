@@ -13,6 +13,9 @@ struct KeyBinding {
 extension Notification.Name {
     /// Posted when the note editor font changes, so open views can re-render.
     static let editorFontDidChange = Notification.Name("editorFontDidChange")
+    /// Posted when the interface font family or text size changes, so views that can rebuild
+    /// themselves (the popover) pick it up without a relaunch.
+    static let uiFontDidChange = Notification.Name("uiFontDidChange")
     /// Posted when the "keep notes on top" preference changes, so open note windows
     /// can update their window level immediately.
     static let noteAlwaysOnTopDidChange = Notification.Name("noteAlwaysOnTopDidChange")
@@ -63,6 +66,8 @@ final class PreferencesManager {
         static let autoIntelEnabled = "autoIntelEnabled"
         static let editorFontName = "editorFontName"
         static let editorFontSize = "editorFontSize"
+        static let uiFontFamily = "uiFontFamily"
+        static let uiFontScale = "uiFontScale"
         static let noteAlwaysOnTop = "noteAlwaysOnTop"
         static let noteWindowWidth = "noteWindowWidth"
         static let noteWindowHeight = "noteWindowHeight"
@@ -88,6 +93,7 @@ final class PreferencesManager {
         Keys.clickBehavior, Keys.noteEditMode,
         Keys.toastTimeout, Keys.openWithActions, Keys.autoIntelEnabled,
         Keys.editorFontName, Keys.editorFontSize,
+        Keys.uiFontFamily, Keys.uiFontScale,
         Keys.noteAlwaysOnTop, Keys.noteWindowWidth, Keys.noteWindowHeight,
         Keys.noteNavigatorWidth,
         Keys.autoUpdateCheckEnabled, Keys.updateCheckIntervalHours,
@@ -245,6 +251,56 @@ final class PreferencesManager {
             defaults.set(newValue.fontName, forKey: Keys.editorFontName)
             defaults.set(Double(newValue.pointSize), forKey: Keys.editorFontSize)
             NotificationCenter.default.post(name: .editorFontDidChange, object: nil)
+        }
+    }
+
+    // MARK: - Interface font
+
+    /// The text-size choices offered in Preferences, as a multiplier applied to every size the
+    /// UI asks `Theme` for.
+    static let uiFontScaleChoices: [(title: String, scale: Double)] = [
+        ("Small (90%)", 0.9),
+        ("Default (100%)", 1.0),
+        ("Large (115%)", 1.15),
+        ("Extra Large (130%)", 1.3),
+        ("Huge (150%)", 1.5),
+    ]
+
+    /// Keep a stored (or hand-edited/synced) scale inside a range that still lays out sanely.
+    /// Pure so it is testable without UserDefaults.
+    static func clampUIFontScale(_ scale: Double) -> Double {
+        guard scale > 0 else { return 1.0 }
+        return min(max(scale, 0.8), 1.5)
+    }
+
+    /// The font family used for the app's own chrome (popover rows, buttons, settings, sidebar).
+    /// `nil` means the bundled Figtree/Georgia pairing `Theme` ships with; `Theme.systemFamily`
+    /// means the macOS system font. Anything else is an installed family name.
+    var uiFontFamily: String? {
+        get {
+            let stored = defaults.string(forKey: Keys.uiFontFamily)
+            return (stored?.isEmpty ?? true) ? nil : stored
+        }
+        set {
+            if let newValue, !newValue.isEmpty {
+                defaults.set(newValue, forKey: Keys.uiFontFamily)
+            } else {
+                defaults.removeObject(forKey: Keys.uiFontFamily)
+            }
+            NotificationCenter.default.post(name: .uiFontDidChange, object: nil)
+        }
+    }
+
+    /// Multiplier applied to every interface font size (and the layout metrics that have to grow
+    /// with the text). 1.0 is the design's own sizing.
+    var uiFontScale: Double {
+        get {
+            let stored = defaults.double(forKey: Keys.uiFontScale)
+            return stored > 0 ? Self.clampUIFontScale(stored) : 1.0
+        }
+        set {
+            defaults.set(Self.clampUIFontScale(newValue), forKey: Keys.uiFontScale)
+            NotificationCenter.default.post(name: .uiFontDidChange, object: nil)
         }
     }
 

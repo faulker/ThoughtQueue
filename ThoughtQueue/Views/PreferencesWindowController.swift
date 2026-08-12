@@ -24,6 +24,11 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     private let clickBehaviorPopup = NSPopUpButton()
     private let noteEditModePopup = NSPopUpButton()
     private let editorFontLabel = NSTextField(labelWithString: "")
+    private let uiFontPopup = NSPopUpButton()
+    private let uiFontSizePopup = NSPopUpButton()
+    /// Family value for each `uiFontPopup` row: `nil` = bundled Figtree, `Theme.systemFamily` =
+    /// system font, otherwise an installed family name.
+    private var uiFontFamilyChoices: [String?] = []
     private let themeToggle = SegmentedPillControl(titles: ["Dark", "Light", "System"])
     private let timeoutField = NSTextField()
     private let openWithTable = NSTableView()
@@ -106,6 +111,18 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
             PreferencesManager.shared.themeMode = [.dark, .light, .system][index]
         }
         stack.addArrangedSubview(themeToggle)
+
+        // Interface font (the app's own chrome, not the note body)
+        stack.addArrangedSubview(sectionLabel("Interface font"))
+        setupUIFontControls()
+        stack.addArrangedSubview(row([fixedLabel("Font:", 60), uiFontPopup]))
+        stack.addArrangedSubview(row([fixedLabel("Size:", 60), uiFontSizePopup]))
+        let uiFontHint = NSTextField(labelWithString: "Applies to windows and menus opened after the change.")
+        uiFontHint.font = Theme.body(11)
+        uiFontHint.textColor = Theme.textSecondary
+        uiFontHint.lineBreakMode = .byTruncatingTail
+        uiFontHint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        stack.addArrangedSubview(uiFontHint)
 
         // Store location
         stack.addArrangedSubview(sectionLabel("Store Folder"))
@@ -367,6 +384,38 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         if let v = Double(timeoutField.stringValue), v > 0 {
             PreferencesManager.shared.toastTimeout = v
         }
+    }
+
+    // MARK: - Interface font
+
+    /// Fill the family and size popups and select whatever is currently stored.
+    private func setupUIFontControls() {
+        uiFontFamilyChoices = [nil, Theme.systemFamily] + NSFontManager.shared.availableFontFamilies.sorted()
+        uiFontPopup.addItems(withTitles: ["Figtree (bundled)", "System"]
+            + NSFontManager.shared.availableFontFamilies.sorted())
+        let currentFamily = PreferencesManager.shared.uiFontFamily
+        uiFontPopup.selectItem(at: uiFontFamilyChoices.firstIndex(where: { $0 == currentFamily }) ?? 0)
+        uiFontPopup.target = self
+        uiFontPopup.action = #selector(uiFontFamilyChanged)
+
+        uiFontSizePopup.addItems(withTitles: PreferencesManager.uiFontScaleChoices.map(\.title))
+        let currentScale = PreferencesManager.shared.uiFontScale
+        let scaleIndex = PreferencesManager.uiFontScaleChoices.firstIndex { abs($0.scale - currentScale) < 0.001 }
+        uiFontSizePopup.selectItem(at: scaleIndex ?? 1)
+        uiFontSizePopup.target = self
+        uiFontSizePopup.action = #selector(uiFontSizeChanged)
+    }
+
+    @objc private func uiFontFamilyChanged(_ sender: NSPopUpButton) {
+        let index = sender.indexOfSelectedItem
+        guard index >= 0, index < uiFontFamilyChoices.count else { return }
+        PreferencesManager.shared.uiFontFamily = uiFontFamilyChoices[index]
+    }
+
+    @objc private func uiFontSizeChanged(_ sender: NSPopUpButton) {
+        let index = sender.indexOfSelectedItem
+        guard index >= 0, index < PreferencesManager.uiFontScaleChoices.count else { return }
+        PreferencesManager.shared.uiFontScale = PreferencesManager.uiFontScaleChoices[index].scale
     }
 
     // MARK: - Editor font

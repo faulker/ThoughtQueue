@@ -106,24 +106,67 @@ enum Theme {
 
     // MARK: - Fonts
 
-    /// Figtree is bundled with the app (see `ATSApplicationFontsPath`); a variable font with
-    /// named weight instances, so each weight below is its own PostScript name. Falls back to the
-    /// system font at the same weight if the font failed to register for any reason.
-    static func body(_ size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
-        let name: String
-        switch weight {
-        case .semibold: name = "Figtree-SemiBold"
-        case .medium: name = "Figtree-Medium"
-        case .bold, .heavy, .black: name = "Figtree-Bold"
-        default: name = "Figtree-Regular"
+    /// Sentinel stored in `PreferencesManager.uiFontFamily` to mean "the macOS system font"
+    /// rather than a named installed family. Starts with a dot so it can never collide with a
+    /// real family name.
+    static let systemFamily = ".system"
+
+    /// Scale a design point size (or a layout metric that has to grow with the text, like a row
+    /// height) by the user's interface text-size preference. Pure so it is testable.
+    static func scaled(_ points: CGFloat, scale: Double) -> CGFloat {
+        points * CGFloat(PreferencesManager.clampUIFontScale(scale))
+    }
+
+    /// A layout metric scaled by the current interface text size, so rows and controls keep
+    /// their proportions when the user bumps the UI font up.
+    static func metric(_ points: CGFloat) -> CGFloat {
+        scaled(points, scale: PreferencesManager.shared.uiFontScale)
+    }
+
+    /// Resolve an interface font from a stored family choice. `nil` uses the bundled Figtree
+    /// (a variable font with named weight instances, registered via `ATSApplicationFontsPath`),
+    /// `systemFamily` uses the system font, and any other value is an installed family name.
+    /// Falls back to the system font at the same weight whenever a face can't be found.
+    /// Pure so it is testable without UserDefaults.
+    static func resolveUIFont(family: String?, size: CGFloat, weight: NSFont.Weight) -> NSFont {
+        if family == systemFamily { return .systemFont(ofSize: size, weight: weight) }
+        guard let family else {
+            let name: String
+            switch weight {
+            case .semibold: name = "Figtree-SemiBold"
+            case .medium: name = "Figtree-Medium"
+            case .bold, .heavy, .black: name = "Figtree-Bold"
+            default: name = "Figtree-Regular"
+            }
+            return NSFont(name: name, size: size) ?? .systemFont(ofSize: size, weight: weight)
         }
-        return NSFont(name: name, size: size) ?? .systemFont(ofSize: size, weight: weight)
+        let isBold = weight == .semibold || weight == .bold || weight == .heavy || weight == .black
+        let traits: NSFontTraitMask = isBold ? .boldFontMask : .unboldFontMask
+        // NSFontManager weights are 0–15, where 5 is regular and 9 is bold.
+        let managerWeight = isBold ? 9 : 5
+        if let font = NSFontManager.shared.font(withFamily: family, traits: traits, weight: managerWeight, size: size) {
+            return font
+        }
+        return NSFont(name: family, size: size) ?? .systemFont(ofSize: size, weight: weight)
+    }
+
+    /// The app's body font at a design size, honoring the interface font family and text size
+    /// preferences.
+    static func body(_ size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
+        let prefs = PreferencesManager.shared
+        return resolveUIFont(family: prefs.uiFontFamily, size: scaled(size, scale: prefs.uiFontScale), weight: weight)
     }
 
     /// Georgia ships with macOS. Used for the design's bold serif accents (primary buttons,
-    /// panel titles) — a deliberate contrast note against the Figtree body text.
+    /// panel titles) — a deliberate contrast note against the Figtree body text. When the user
+    /// picks a custom interface font, that family takes over here too, so the whole UI matches.
     static func heading(_ size: CGFloat, bold: Bool = true) -> NSFont {
+        let prefs = PreferencesManager.shared
+        let pointSize = scaled(size, scale: prefs.uiFontScale)
+        if let family = prefs.uiFontFamily {
+            return resolveUIFont(family: family, size: pointSize, weight: bold ? .bold : .regular)
+        }
         let name = bold ? "Georgia-Bold" : "Georgia"
-        return NSFont(name: name, size: size) ?? .systemFont(ofSize: size, weight: bold ? .bold : .regular)
+        return NSFont(name: name, size: pointSize) ?? .systemFont(ofSize: pointSize, weight: bold ? .bold : .regular)
     }
 }

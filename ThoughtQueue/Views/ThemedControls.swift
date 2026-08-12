@@ -63,7 +63,7 @@ final class ThemedButton: NSButton {
         layer?.cornerRadius = Theme.radiusMedium
         layer?.borderWidth = 1
         translatesAutoresizingMaskIntoConstraints = false
-        heightAnchor.constraint(equalToConstant: 32).isActive = true
+        heightAnchor.constraint(equalToConstant: Theme.metric(32)).isActive = true
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -77,7 +77,7 @@ final class ThemedButton: NSButton {
     override var intrinsicContentSize: NSSize {
         var size = super.intrinsicContentSize
         if size.width > 0 { size.width += 32 }
-        size.height = max(size.height, 32)
+        size.height = max(size.height, Theme.metric(32))
         return size
     }
 
@@ -139,7 +139,7 @@ final class ThemedSearchField: NSView, NSTextFieldDelegate {
         layer?.cornerRadius = Theme.radiusMedium
         layer?.borderWidth = 1
         translatesAutoresizingMaskIntoConstraints = false
-        heightAnchor.constraint(equalToConstant: 30).isActive = true
+        heightAnchor.constraint(equalToConstant: Theme.metric(30)).isActive = true
 
         let icon = NSImageView(image: NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil) ?? NSImage())
         icon.contentTintColor = Theme.iconStroke
@@ -185,7 +185,7 @@ final class SegmentedPillControl: NSView {
         wantsLayer = true
         layer?.cornerRadius = Theme.radiusMedium
         translatesAutoresizingMaskIntoConstraints = false
-        heightAnchor.constraint(equalToConstant: 26).isActive = true
+        heightAnchor.constraint(equalToConstant: Theme.metric(26)).isActive = true
 
         let stack = NSStackView()
         stack.orientation = .horizontal

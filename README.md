@@ -173,6 +173,10 @@ Select text in any app, hit the shortcut, and keep working. A toast confirms the
 - **Double-click** the menu bar icon to open your working document. Set one first by right-clicking a note in the note window's navigation panel and picking **Set as Working Document**
 - **Right-click** the menu bar icon for Categories, Preferences, or Quit
 
+### Delete a note
+
+Click the trash icon on a row and the row itself asks "Delete?" right there in the popover, with a checkmark to confirm and an x to back out. No dialog is thrown over the menu bar, and the prompt cancels itself if you move off the row or wait a few seconds.
+
 ### Copy a note
 
 Click the **Copy note** icon on any row to copy its full body, or **Copy path** to copy its absolute file path -- no need to open the note first.
@@ -193,6 +197,10 @@ Every note opens in a single view/edit window. It opens read-only with markdown 
 ### Organize with categories
 
 Open **Categories…** from the menu bar icon's right-click menu to add, rename, or delete category folders (deleting moves notes to Uncategorized). To move a note into a different category, use the category dropdown in the note window; it also offers **New Category** to create and move in one step.
+
+### Change the interface font
+
+**Preferences > Interface font** sets the font family and text size used by the app's own UI (popover rows, buttons, settings, the sidebar). Pick the bundled Figtree, the macOS system font, or any installed family, and a size from Small (90%) to Huge (150%); rows and controls grow with the text. The note body has its own separate setting under **Note editor font**. Changes apply to windows and menus opened after the change.
 
 ### Change hotkeys
 

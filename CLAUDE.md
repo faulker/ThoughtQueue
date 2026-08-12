@@ -43,7 +43,7 @@ Releases are built by `.github/workflows/release.yml` (tag push `v*` or manual r
 
 ### UI layers
 
-- **Left-click menu bar icon**: `PopoverController` shows searchable note rows with quick actions and "+ Add"
+- **Left-click menu bar icon**: `PopoverController` shows searchable note rows with quick actions and "+ Add". Deleting confirms inline inside `NoteRowView` (the action strip swaps for a "Delete?" prompt, auto-cancelling on mouse-out or after a few seconds), never via a modal alert
 - **Double-click menu bar icon**: Opens the working document in a note window (`AppDelegate.statusItemAction` routes on `NSEvent.clickCount`; the first click still opens the popover, the second dismisses it)
 - **Right-click menu bar icon**: Context menu with Categories, Preferences, Quit
 - **CategoryManagerWindowController**: Singleton window for adding, renaming, and deleting category folders (delete moves notes to Uncategorized). Opened from the right-click menu.
@@ -53,6 +53,8 @@ Releases are built by `.github/workflows/release.yml` (tag push `v*` or manual r
 ### Visual design ("Organic" theme)
 
 `Theme.swift` is the single source of truth for the cream/sage light palette and its dark counterpart (every color is a light/dark `NSColor` pair via `NSColor(light:dark:)`, so it tracks system appearance automatically), plus the bundled Figtree body font (`Theme.body`) and Georgia accent font (`Theme.heading`). `ThemedControls.swift` holds the reusable custom-drawn controls built on those tokens: `ThemedButton` (filled/outlined pill buttons), `ThemedSearchField` (flat pill search input), `SegmentedPillControl` (two-way toggle, e.g. the editor font quick-picker). New UI should pull colors/fonts from `Theme` rather than system colors, except where a control's native chrome is left as-is deliberately (e.g. `NSPopUpButton`, native checkboxes, and `NoteNavigatorViewController`'s `NSSearchField`, which tests drive directly).
+
+The interface font is user-configurable: `PreferencesManager.uiFontFamily` (nil = bundled Figtree, `Theme.systemFamily` = system font, otherwise an installed family) and `uiFontScale` feed `Theme.body`/`Theme.heading`, and `Theme.metric(_:)` scales layout constants (row heights, control heights) by the same factor so bigger text doesn't clip. Changing either posts `.uiFontDidChange`; views pick the new font up as they are rebuilt (the popover rebuilds on every open).
 
 Figtree ships in `ThoughtQueue/Resources/Fonts/Figtree.ttf` (a variable font; `Theme.body` addresses its named weight instances directly, e.g. `Figtree-SemiBold`) and is registered automatically via `ATSApplicationFontsPath` in Info.plist — no manual registration code needed.
 
