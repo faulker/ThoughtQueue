@@ -107,12 +107,14 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         // collapsed via the plain setter (the animator misbehaves before the view is in a
         // window), and the split view deliberately has no autosaveName: that restores collapse
         // state asynchronously, which would defeat "hidden by default", and every note window
-        // would share the one key.
+        // would share the one key. Spring loading is off so a drag near the edge can't reveal
+        // it either — the header button and ⌃⌘S are the only ways in.
         let navigatorItem = NSSplitViewItem(sidebarWithViewController: navigator)
         navigatorItem.canCollapse = true
         navigatorItem.minimumThickness = Self.navigatorMinWidth
         navigatorItem.maximumThickness = Self.navigatorMaxWidth
         navigatorItem.holdingPriority = NSLayoutConstraint.Priority(260) // resists resize, keeps its width
+        navigatorItem.isSpringLoaded = false
         self.navigatorItem = navigatorItem
 
         let editorItem = NSSplitViewItem(viewController: editor)
@@ -121,12 +123,19 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
 
         splitVC.addSplitViewItem(navigatorItem)
         splitVC.addSplitViewItem(editorItem)
-        navigatorItem.isCollapsed = true
         window.contentViewController = splitVC
         // Assigning contentViewController resizes the window to the content view's fixed
         // loadView size, clobbering the contentRect above. Re-apply the remembered size
         // afterward so restored sizes actually stick.
         window.setContentSize(size)
+
+        // Collapse only after the split view is installed, then force the layout pass right
+        // away. Collapsing beforehand leaves the divider geometry uncommitted until something
+        // else triggers the first layout — moving the mouse toward the left edge updates the
+        // divider's tracking areas and does exactly that, which flashed the (still empty)
+        // navigator open for a moment the first time a note window was used.
+        navigatorItem.isCollapsed = true
+        splitVC.view.layoutSubtreeIfNeeded()
         window.center()
         super.init(window: window)
         window.delegate = self

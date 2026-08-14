@@ -34,6 +34,7 @@
 		B6A1BA8F73ED13D4D7253204 /* NoteWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BFC637B03AD839B31132FBB /* NoteWindowController.swift */; };
 		B8CFE04CFF988023E1194CE2 /* OpenWithTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A7EF92C8ACC9C33D7C5FA64 /* OpenWithTests.swift */; };
 		BE7AE6388A3748922B5B2C6F /* NoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98338EB2FC611F4C84B0975B /* NoteStore.swift */; };
+		C27FC989912D4B83A8A9F5E1 /* NoteWindowChromeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48398CC33C0B881A2FBDBEF4 /* NoteWindowChromeTests.swift */; };
 		C3C4B0875EB65DA61D4C848F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2A50C039EC60D91FBD30BC2E /* Assets.xcassets */; };
 		C6D1E04CD782B80CCF66EF9A /* UpdateServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42D0B524E5A0030EE24FF49 /* UpdateServiceTests.swift */; };
 		CE31692FCD718B50313E7292 /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 820DCC5FE0F2B837244A7F30 /* MarkdownRenderer.swift */; };
@@ -64,6 +65,7 @@
 		2A50C039EC60D91FBD30BC2E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3AA1FEEEBECAED63C7A00726 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 		434A8B44753B2B9E4EAD7759 /* FuzzySearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzySearch.swift; sourceTree = "<group>"; };
+		48398CC33C0B881A2FBDBEF4 /* NoteWindowChromeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteWindowChromeTests.swift; sourceTree = "<group>"; };
 		4A287E8F69BF7C1D0315654F /* ThemedControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemedControls.swift; sourceTree = "<group>"; };
 		4BFC637B03AD839B31132FBB /* NoteWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteWindowController.swift; sourceTree = "<group>"; };
 		528301576346031EC40FA4B9 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -172,6 +174,7 @@
 				B88640B5CD4D2E2A11EE4979 /* MarkdownRendererTests.swift */,
 				E0FE0FB16D68AE68FB9F257D /* NoteRowDeleteTests.swift */,
 				6C2BBABACAEBAC63087F8627 /* NoteStoreTests.swift */,
+				48398CC33C0B881A2FBDBEF4 /* NoteWindowChromeTests.swift */,
 				8A7EF92C8ACC9C33D7C5FA64 /* OpenWithTests.swift */,
 				5C4ABA939FA382F6AAD18D83 /* PreferencesManagerTests.swift */,
 				0127701C5E8C5172D874DB12 /* SearchAndNamingTests.swift */,
@@ -327,6 +330,7 @@
 				23793BE184543FE6507D167D /* MarkdownRendererTests.swift in Sources */,
 				F9D46F5224BA6C2CD039901A /* NoteRowDeleteTests.swift in Sources */,
 				992471F77F1B4A1C3C0DC162 /* NoteStoreTests.swift in Sources */,
+				C27FC989912D4B83A8A9F5E1 /* NoteWindowChromeTests.swift in Sources */,
 				B8CFE04CFF988023E1194CE2 /* OpenWithTests.swift in Sources */,
 				227CC50DEBC5583B89FC0A65 /* PreferencesManagerTests.swift in Sources */,
 				B285710C8892ABAF9B8D319B /* SearchAndNamingTests.swift in Sources */,

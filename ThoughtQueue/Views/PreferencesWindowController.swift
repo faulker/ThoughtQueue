@@ -44,6 +44,11 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     /// rather than the window growing tall enough to run off a small display.
     static let contentSize = NSSize(width: 520, height: 640)
 
+    /// Preferences always floats above the app's other windows. One step above
+    /// `NoteWindowController.pinnedLevel` so a pinned note can't bury it, and still below
+    /// `.floating`, which annotation overlays from other apps (Quillbot) use.
+    static let level = NSWindow.Level(rawValue: NoteWindowController.pinnedLevel.rawValue + 1)
+
     convenience init() {
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: PreferencesWindowController.contentSize),
@@ -53,6 +58,10 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         )
         window.title = "ThoughtQueue Preferences"
         window.minSize = NSSize(width: 520, height: 400)
+        window.level = PreferencesWindowController.level
+        // Reopening from the menu bar while the user is on another desktop should bring the
+        // window to them rather than switching Spaces.
+        window.collectionBehavior.insert(.moveToActiveSpace)
         window.center()
         self.init(window: window)
         openWithActions = PreferencesManager.shared.openWithActions

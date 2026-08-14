@@ -48,7 +48,9 @@ Releases are built by `.github/workflows/release.yml` (tag push `v*` or manual r
 - **Right-click menu bar icon**: Context menu with Categories, Preferences, Quit
 - **CategoryManagerWindowController**: Singleton window for adding, renaming, and deleting category folders (delete moves notes to Uncategorized). Opened from the right-click menu.
 - **NoteWindowController**: The single note window for creating, viewing, and editing a note (inline editable title + category dropdown, view/edit toggle). Used by "+ Add Note" and detailed capture alike. Its content is an `NSSplitViewController`: `NoteNavigatorViewController` in a collapsible sidebar item (hidden by default, toggled from the header or Ctrl+Cmd+S) plus `NoteEditorViewController`. Reach the editor from a window via `NSWindow.noteEditor`.
-- **NoteNavigatorViewController**: The note window's navigation panel. Source-list outline of notes grouped by category with a fuzzy search field; selecting a note retargets the same window via `NoteEditorViewController.load(note:)`, unless that note already has its own window (which is focused via `NoteWindowController.focus`, including deminiaturize and `.moveToActiveSpace`). Right-click a note to set or unset the working document.
+- **NoteNavigatorViewController**: The note window's navigation panel. Source-list outline of notes grouped by category with a fuzzy search field; selecting a note retargets the same window via `NoteEditorViewController.load(note:)`, unless that note already has its own window (which is focused via `NoteWindowController.focus`, including deminiaturize and `.moveToActiveSpace`). Right-click a note to set or unset the working document. It loads its tree in `viewDidLoad`, so the panel is never blank even if AppKit puts it on screen before the first explicit `reload()`.
+
+Window levels stack deliberately: pinned note windows sit at `NoteWindowController.pinnedLevel` (`.normal` + 1), Preferences one step above that (`PreferencesWindowController.level`), and both stay below `.floating` so other apps' annotation overlays are not covered.
 
 ### Visual design ("Organic" theme)
 

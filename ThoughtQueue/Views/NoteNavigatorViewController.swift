@@ -102,7 +102,17 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
         NotificationCenter.default.addObserver(self, selector: #selector(onNotesChanged), name: .notesDidChange, object: nil)
     }
 
+    /// Load the tree as soon as the view exists rather than waiting for the panel to be
+    /// revealed, so the list is never empty on screen no matter what put it there.
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        reload()
+    }
+
     deinit { NotificationCenter.default.removeObserver(self) }
+
+    /// Rows currently in the outline (groups plus their expanded notes). Read by tests.
+    var rowCount: Int { outlineView.numberOfRows }
 
     /// Rebuild from the store, debounced so a burst of saves costs one tree walk.
     @objc private func onNotesChanged() {
