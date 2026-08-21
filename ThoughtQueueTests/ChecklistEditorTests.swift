@@ -142,34 +142,24 @@ final class ChecklistEditorTests: XCTestCase {
 
     // MARK: - Keyboard
 
-    /// Put the checklist in a real window so fields can become first responder and hand out a
-    /// field editor: the keyboard paths all run through it.
-    private func hostInWindow(_ vc: NoteEditorViewController) -> NSWindow {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 520),
-                              styleMask: [.titled], backing: .buffered, defer: false)
-        window.contentViewController = vc
-        window.makeKeyAndOrderFront(nil)
-        window.layoutIfNeeded()
-        return window
-    }
-
-    /// Focus row `index`, put the caret at `offset`, and send one command selector.
+    /// Drive `control(_:textView:doCommandBy:)` with a detached text view so the caret position
+    /// is exact. A real field editor needs a key window, which GitHub's macOS runners do not
+    /// give the test host.
     @discardableResult
     private func sendCommand(_ selector: Selector, toRow index: Int, offset: Int,
-                             in vc: NoteEditorViewController, window: NSWindow) -> Bool {
-        vc.checklist.focusRowForTesting(index, offset: offset)
-        guard let field = vc.checklist.fieldForTesting(at: index),
-              let editor = field.currentEditor() as? NSTextView else { return false }
+                             in vc: NoteEditorViewController) -> Bool {
+        guard let field = vc.checklist.fieldForTesting(at: index) else { return false }
+        let editor = NSTextView(frame: .zero)
+        editor.string = field.stringValue
+        let clamped = min(max(offset, 0), (editor.string as NSString).length)
+        editor.selectedRange = NSRange(location: clamped, length: 0)
         return vc.checklist.control(field, textView: editor, doCommandBy: selector)
     }
 
     func testReturnAtEndOfAnItemAddsTheNextOne() throws {
         let (vc, note) = try makeEditor(body: "- [ ] milk\n")
-        let window = hostInWindow(vc)
-        defer { window.close() }
 
-        XCTAssertTrue(sendCommand(#selector(NSResponder.insertNewline(_:)), toRow: 0, offset: 4,
-                                  in: vc, window: window))
+        XCTAssertTrue(sendCommand(#selector(NSResponder.insertNewline(_:)), toRow: 0, offset: 4, in: vc))
 
         XCTAssertEqual(TaskList.body(from: vc.checklist.rows), "- [ ] milk\n- [ ] \n")
         vc.flushChecklist()
@@ -178,50 +168,37 @@ final class ChecklistEditorTests: XCTestCase {
 
     func testReturnMidItemSplitsIt() throws {
         let (vc, _) = try makeEditor(body: "- [ ] milkbread\n")
-        let window = hostInWindow(vc)
-        defer { window.close() }
 
-        sendCommand(#selector(NSResponder.insertNewline(_:)), toRow: 0, offset: 4, in: vc, window: window)
+        sendCommand(#selector(NSResponder.insertNewline(_:)), toRow: 0, offset: 4, in: vc)
 
         XCTAssertEqual(TaskList.body(from: vc.checklist.rows), "- [ ] milk\n- [ ] bread\n")
     }
 
     func testReturnOnAnEmptyItemEndsTheList() throws {
         let (vc, _) = try makeEditor(body: "- [ ] milk\n- [ ] \n")
-        let window = hostInWindow(vc)
-        defer { window.close() }
 
-        sendCommand(#selector(NSResponder.insertNewline(_:)), toRow: 1, offset: 0, in: vc, window: window)
+        sendCommand(#selector(NSResponder.insertNewline(_:)), toRow: 1, offset: 0, in: vc)
 
         XCTAssertEqual(TaskList.body(from: vc.checklist.rows), "- [ ] milk\n")
     }
 
     func testBackspaceAtStartOfANonEmptyItemMergesItUp() throws {
         let (vc, _) = try makeEditor(body: "- [ ] milk\n- [ ] bread\n")
-        let window = hostInWindow(vc)
-        defer { window.close() }
 
-        sendCommand(#selector(NSResponder.deleteBackward(_:)), toRow: 1, offset: 0, in: vc, window: window)
+        sendCommand(#selector(NSResponder.deleteBackward(_:)), toRow: 1, offset: 0, in: vc)
 
         XCTAssertEqual(TaskList.body(from: vc.checklist.rows), "- [ ] milkbread\n")
     }
 
     func testBackspaceMidTextIsLeftToTheFieldEditor() throws {
         let (vc, _) = try makeEditor(body: "- [ ] milk\n")
-        let window = hostInWindow(vc)
-        defer { window.close() }
 
-        XCTAssertFalse(sendCommand(#selector(NSResponder.deleteBackward(_:)), toRow: 0, offset: 2,
-                                   in: vc, window: window),
+        XCTAssertFalse(sendCommand(#selector(NSResponder.deleteBackward(_:)), toRow: 0, offset: 2, in: vc),
                        "ordinary deletion inside an item must not be intercepted")
     }
 
     func testTypingIntoAnItemPersists() throws {
         let (vc, note) = try makeEditor(body: "- [ ] \n")
-        let window = hostInWindow(vc)
-        defer { window.close() }
-
-        vc.checklist.focusRowForTesting(0, offset: 0)
         let field = try XCTUnwrap(vc.checklist.fieldForTesting(at: 0))
         field.stringValue = "milk"
         vc.checklist.controlTextDidEndEditing(Notification(name: NSControl.textDidEndEditingNotification,

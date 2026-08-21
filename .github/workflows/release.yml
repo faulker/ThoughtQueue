@@ -142,7 +142,7 @@ jobs:
       - name: Run tests
         if: ${{ github.event.inputs.skip_tests != 'true' }}
         run: |
-          set -o pipefail
+          set +e
           xcodebuild -project ThoughtQueue.xcodeproj \
             -scheme ThoughtQueueTests \
             -configuration Debug \
@@ -150,7 +150,13 @@ jobs:
             -derivedDataPath build-test \
             CODE_SIGN_IDENTITY=- \
             CODE_SIGNING_REQUIRED=NO \
-            test | tail -40
+            test 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | tail -40
+          STATUS=${PIPESTATUS[0]}
+          if [ "$STATUS" -ne 0 ]; then
+            echo "==== failing tests ===="
+            grep -E "Test Case .* failed|error: |Failing tests:|XCTAssert" "$RUNNER_TEMP/xcodebuild-test.log" || true
+            exit "$STATUS"
+          fi
 
       # Signing and notarization are optional: without the Apple secrets the app is
       # ad-hoc signed instead, and the release notes say so.
