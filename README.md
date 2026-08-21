@@ -2,6 +2,8 @@
 
 A macOS menu bar app for capturing quick notes from anywhere and doing something useful with them right away -- copy them, or run them straight into whatever app or command you use next. Notes are plain markdown files on disk, not locked in a database or tied to any one destination.
 
+[Project page on sleepymagpie.com](https://sleepymagpie.com/tools/thoughtqueue.html)
+
 ## Why
 
 You're reading something, debugging code, or thinking out loud and want to jot it down without breaking flow. ThoughtQueue lives in your menu bar: grab text with a hotkey (or just type a note), file it into a category, and when you're ready, copy it or fire it off to an editor, a CLI tool, or an app like Claude Desktop with one click.
@@ -11,8 +13,9 @@ You're reading something, debugging code, or thinking out loud and want to jot i
 - **Global hotkeys** -- capture selected text from any app without switching windows
 - **Quick capture** -- one shortcut saves instantly, no interruption
 - **Detailed capture** -- a second shortcut opens the note editor pre-filled with the selection so you can adjust it before saving
-- **Add note** -- write a note from scratch via the `+ Add` button in the menu bar popover
+- **Add note** -- write a note from scratch via the `+ Add` button in the menu bar popover, or start a checkbox list with `+ List`
 - **Note editor** -- a single window per note with a view/edit toggle: markdown renders by default, click or start typing to edit the raw text, with autosave and full undo/redo (Cmd+Z / Cmd+Shift+Z)
+- **Checklists** -- a note whose lines are all `- [ ]` items opens as a real checkbox list rather than a markdown document: every box is always clickable, each item is its own field, and there is no edit mode to enter or leave. Start one with `+ List` in the popover. It is still a plain `.md` file using standard task syntax, so it renders as a checklist on GitHub too
 - **Navigation panel** -- the note window has a collapsible panel on the left listing every note grouped by category, with a search field. Hidden by default; the sidebar button in the header (or Ctrl+Cmd+S) reveals it, and picking a note switches the window over to it
 - **Copy, don't just open** -- one click to copy a note's full body or its file path straight to the clipboard, right from its row
 - **Clone note** -- duplicate a note from the popover row; the copy keeps the same body and category, titled `copy <original>`
@@ -193,6 +196,30 @@ Configure destinations in **Preferences > Open With actions**: add, edit, delete
 ### Edit a note
 
 Every note opens in a single view/edit window. It opens read-only with markdown rendered; click, double-click, or start typing (configurable in Preferences) to switch to raw-text edit mode. Edits autosave on save/close, and the usual Cmd+Z / Cmd+Shift+Z undo/redo works while editing.
+
+### Checklists
+
+Click `+ List` in the popover to start one. It opens as a checkbox list with the first item ready
+to type: press Return for the next item, Return on an empty item to finish, and Backspace at the
+start of an item to merge it back into the one above. Tab and the arrow keys move between items.
+
+A list note is never a markdown document in the editor. There is no view/edit toggle on it, and
+nothing you click or type switches it into raw text, so a checkbox is always just a checkbox:
+click it and it ticks off and saves. Checked items stay where they are, struck through, so the
+list never reshuffles under you. Headings become section labels, so you can group items under
+`# Groceries` and `## Hardware`.
+
+On disk it is still ordinary markdown using `- [ ]` / `- [x]` task syntax, so a list stays
+greppable, syncs like any other file, and renders as a checklist on GitHub. Editing an item only
+rewrites that line; everything else in the file is left byte for byte alone, including indentation,
+`*` or `+` bullets, and Windows line endings.
+
+If you need the raw markdown for a note (to paste in a long list, or because a note was treated as
+a list when you did not mean it to be), use **View > Edit as Markdown** (Shift+Cmd+M). It applies
+to that note for as long as its window is open.
+
+A note that mixes prose with a few `- [ ]` lines is not a list. It stays an ordinary markdown note
+with the usual view/edit toggle, and its checkboxes are clickable in the rendered view.
 
 ### Organize with categories
 

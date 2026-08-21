@@ -13,15 +13,21 @@
 		227CC50DEBC5583B89FC0A65 /* PreferencesManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4ABA939FA382F6AAD18D83 /* PreferencesManagerTests.swift */; };
 		23793BE184543FE6507D167D /* MarkdownRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B88640B5CD4D2E2A11EE4979 /* MarkdownRendererTests.swift */; };
 		23D25801986C49A9ADF44D32 /* PreferencesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B3AEE9D555745E4BBD03DAB /* PreferencesManager.swift */; };
+		311F0E9E89322C99A186B36C /* ChecklistRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A05974C799C7A6EAEE377E4 /* ChecklistRowView.swift */; };
+		3F202CF382553C98D774118F /* ChecklistRowsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0349630BE56F7AE1598770 /* ChecklistRowsTests.swift */; };
 		5061115D8FED3350D0C77278 /* ToastWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1D741EA098FEA403F3A713 /* ToastWindow.swift */; };
+		56DA9797DC951B6D0946C457 /* ChecklistViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3BA7BCB7F16DE095C4BA7E0 /* ChecklistViewController.swift */; };
+		5A40D7E39478666E48DE2E96 /* ChecklistEditorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A7EA4608600D511EBDE3330 /* ChecklistEditorTests.swift */; };
 		5B45DA1A806D3B0BCC7D8412 /* UIFontPreferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96CBBBE98C0F41A86E34B5F6 /* UIFontPreferenceTests.swift */; };
 		644BBD5A402C82BEA5090851 /* AutoIntelService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64EBD6B26F170099FE531BC2 /* AutoIntelService.swift */; };
 		69AD78D9A1CD40444A12F222 /* NoteNavigatorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A99BA8996F309A96220BE1AE /* NoteNavigatorViewController.swift */; };
 		6AD7BA1B94E698A3CE34720B /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC1A9A03A363DC795C406CA /* AppDelegate.swift */; };
 		75B74E13B42623813835D958 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = BBC719AF7195D332463DFF29 /* Fonts */; };
+		7AF4D17E472FAFA819B80A6B /* ChecklistSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70EE18318E6F916AF16ADBFD /* ChecklistSnapshotTests.swift */; };
 		8C50371AF57E54D18011E0F2 /* ThemedControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A287E8F69BF7C1D0315654F /* ThemedControls.swift */; };
 		914FBC3C964A141C97ABCC43 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528301576346031EC40FA4B9 /* main.swift */; };
 		92C0395231C5D7664F9EF958 /* CategoryManagerWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD3ED5F71DE593D4B1CC5DA3 /* CategoryManagerWindowController.swift */; };
+		953592C3098E8486510A455A /* TaskToggleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BA91E1F8AD5E8CBCB257E04 /* TaskToggleTests.swift */; };
 		992471F77F1B4A1C3C0DC162 /* NoteStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2BBABACAEBAC63087F8627 /* NoteStoreTests.swift */; };
 		9A2C154B724623EEDA2EB6CF /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84743BB203834FF8EE6CE272 /* HotkeyManager.swift */; };
 		9E6B4AF4AC89C3159E8AE541 /* FolderWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94836FE437148129DAEB26AC /* FolderWatcher.swift */; };
@@ -31,6 +37,7 @@
 		B31846DF4826EDB26B1A5133 /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = E581470727BCC584E29154DF /* Note.swift */; };
 		B37DC1E25F71066404FD0466 /* ReviewToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8673FE14EFCB456AC0B0DD0 /* ReviewToast.swift */; };
 		B3D61CAE4D03ACC45ECCB2DB /* PopoverController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111961E5B4F3737B22DA8447 /* PopoverController.swift */; };
+		B66D774E9DB1C8C4D5F0CFC6 /* TaskListRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEC71685D27919559190BA8B /* TaskListRows.swift */; };
 		B6A1BA8F73ED13D4D7253204 /* NoteWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BFC637B03AD839B31132FBB /* NoteWindowController.swift */; };
 		B8CFE04CFF988023E1194CE2 /* OpenWithTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A7EF92C8ACC9C33D7C5FA64 /* OpenWithTests.swift */; };
 		BE7AE6388A3748922B5B2C6F /* NoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98338EB2FC611F4C84B0975B /* NoteStore.swift */; };
@@ -39,8 +46,10 @@
 		C6D1E04CD782B80CCF66EF9A /* UpdateServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42D0B524E5A0030EE24FF49 /* UpdateServiceTests.swift */; };
 		CE31692FCD718B50313E7292 /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 820DCC5FE0F2B837244A7F30 /* MarkdownRenderer.swift */; };
 		D0FF3DD70CC5CB74BF4C973E /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AA1FEEEBECAED63C7A00726 /* UpdateService.swift */; };
+		D1F6A019C657C5CB208A2479 /* TaskListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F56BCE26B12EEEDDE613ED6F /* TaskListTests.swift */; };
 		DC6DDA37BE3D64EA09682D6F /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8147A07E5B7396382827499D /* Theme.swift */; };
 		DDA17C113C96444ECC170AF5 /* CaptureServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96450E0A3079E1CC546A7295 /* CaptureServiceTests.swift */; };
+		E0E008FCBCEB5B5B33EFB562 /* TaskList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD73C67F68915728831F769 /* TaskList.swift */; };
 		E107522DFE5E5DBF15EE843A /* NoteRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F563DDBE690F505C74116C0D /* NoteRowView.swift */; };
 		F2762077DB217E71E5E65688 /* FuzzySearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 434A8B44753B2B9E4EAD7759 /* FuzzySearch.swift */; };
 		F9D46F5224BA6C2CD039901A /* NoteRowDeleteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0FE0FB16D68AE68FB9F257D /* NoteRowDeleteTests.swift */; };
@@ -63,16 +72,22 @@
 		0A1D741EA098FEA403F3A713 /* ToastWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastWindow.swift; sourceTree = "<group>"; };
 		111961E5B4F3737B22DA8447 /* PopoverController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverController.swift; sourceTree = "<group>"; };
 		2A50C039EC60D91FBD30BC2E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		3A7EA4608600D511EBDE3330 /* ChecklistEditorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistEditorTests.swift; sourceTree = "<group>"; };
 		3AA1FEEEBECAED63C7A00726 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
+		3DD73C67F68915728831F769 /* TaskList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskList.swift; sourceTree = "<group>"; };
 		434A8B44753B2B9E4EAD7759 /* FuzzySearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzySearch.swift; sourceTree = "<group>"; };
 		48398CC33C0B881A2FBDBEF4 /* NoteWindowChromeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteWindowChromeTests.swift; sourceTree = "<group>"; };
 		4A287E8F69BF7C1D0315654F /* ThemedControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemedControls.swift; sourceTree = "<group>"; };
+		4BA91E1F8AD5E8CBCB257E04 /* TaskToggleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskToggleTests.swift; sourceTree = "<group>"; };
 		4BFC637B03AD839B31132FBB /* NoteWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteWindowController.swift; sourceTree = "<group>"; };
 		528301576346031EC40FA4B9 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		5A05974C799C7A6EAEE377E4 /* ChecklistRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistRowView.swift; sourceTree = "<group>"; };
 		5C4ABA939FA382F6AAD18D83 /* PreferencesManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesManagerTests.swift; sourceTree = "<group>"; };
+		5E0349630BE56F7AE1598770 /* ChecklistRowsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistRowsTests.swift; sourceTree = "<group>"; };
 		64EBD6B26F170099FE531BC2 /* AutoIntelService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoIntelService.swift; sourceTree = "<group>"; };
 		6C2BBABACAEBAC63087F8627 /* NoteStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStoreTests.swift; sourceTree = "<group>"; };
 		6EDD1604740F094B60192708 /* ThoughtQueue.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ThoughtQueue.entitlements; sourceTree = "<group>"; };
+		70EE18318E6F916AF16ADBFD /* ChecklistSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistSnapshotTests.swift; sourceTree = "<group>"; };
 		7B3AEE9D555745E4BBD03DAB /* PreferencesManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesManager.swift; sourceTree = "<group>"; };
 		7CC1A9A03A363DC795C406CA /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		8147A07E5B7396382827499D /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -90,6 +105,8 @@
 		A99BA8996F309A96220BE1AE /* NoteNavigatorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteNavigatorViewController.swift; sourceTree = "<group>"; };
 		B88640B5CD4D2E2A11EE4979 /* MarkdownRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRendererTests.swift; sourceTree = "<group>"; };
 		BBC719AF7195D332463DFF29 /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fonts; path = ThoughtQueue/Resources/Fonts; sourceTree = SOURCE_ROOT; };
+		BEC71685D27919559190BA8B /* TaskListRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListRows.swift; sourceTree = "<group>"; };
+		C3BA7BCB7F16DE095C4BA7E0 /* ChecklistViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistViewController.swift; sourceTree = "<group>"; };
 		C42D0B524E5A0030EE24FF49 /* UpdateServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateServiceTests.swift; sourceTree = "<group>"; };
 		CD3ED5F71DE593D4B1CC5DA3 /* CategoryManagerWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryManagerWindowController.swift; sourceTree = "<group>"; };
 		D19EA2444190D4504688A141 /* AutoIntelServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoIntelServiceTests.swift; sourceTree = "<group>"; };
@@ -99,6 +116,7 @@
 		E581470727BCC584E29154DF /* Note.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Note.swift; sourceTree = "<group>"; };
 		F3D4B4FE21C312B1B882832F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F563DDBE690F505C74116C0D /* NoteRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteRowView.swift; sourceTree = "<group>"; };
+		F56BCE26B12EEEDDE613ED6F /* TaskListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListTests.swift; sourceTree = "<group>"; };
 		FCDE2A14287882936B7CB558 /* ThoughtQueueTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ThoughtQueueTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -135,6 +153,8 @@
 				434A8B44753B2B9E4EAD7759 /* FuzzySearch.swift */,
 				E581470727BCC584E29154DF /* Note.swift */,
 				98338EB2FC611F4C84B0975B /* NoteStore.swift */,
+				3DD73C67F68915728831F769 /* TaskList.swift */,
+				BEC71685D27919559190BA8B /* TaskListRows.swift */,
 			);
 			path = Store;
 			sourceTree = "<group>";
@@ -152,6 +172,8 @@
 			isa = PBXGroup;
 			children = (
 				CD3ED5F71DE593D4B1CC5DA3 /* CategoryManagerWindowController.swift */,
+				5A05974C799C7A6EAEE377E4 /* ChecklistRowView.swift */,
+				C3BA7BCB7F16DE095C4BA7E0 /* ChecklistViewController.swift */,
 				820DCC5FE0F2B837244A7F30 /* MarkdownRenderer.swift */,
 				A99BA8996F309A96220BE1AE /* NoteNavigatorViewController.swift */,
 				F563DDBE690F505C74116C0D /* NoteRowView.swift */,
@@ -171,6 +193,9 @@
 			children = (
 				D19EA2444190D4504688A141 /* AutoIntelServiceTests.swift */,
 				96450E0A3079E1CC546A7295 /* CaptureServiceTests.swift */,
+				3A7EA4608600D511EBDE3330 /* ChecklistEditorTests.swift */,
+				5E0349630BE56F7AE1598770 /* ChecklistRowsTests.swift */,
+				70EE18318E6F916AF16ADBFD /* ChecklistSnapshotTests.swift */,
 				B88640B5CD4D2E2A11EE4979 /* MarkdownRendererTests.swift */,
 				E0FE0FB16D68AE68FB9F257D /* NoteRowDeleteTests.swift */,
 				6C2BBABACAEBAC63087F8627 /* NoteStoreTests.swift */,
@@ -179,6 +204,8 @@
 				5C4ABA939FA382F6AAD18D83 /* PreferencesManagerTests.swift */,
 				0127701C5E8C5172D874DB12 /* SearchAndNamingTests.swift */,
 				01EA72EA59E1566CFC3EF594 /* SettingsSyncTests.swift */,
+				F56BCE26B12EEEDDE613ED6F /* TaskListTests.swift */,
+				4BA91E1F8AD5E8CBCB257E04 /* TaskToggleTests.swift */,
 				96CBBBE98C0F41A86E34B5F6 /* UIFontPreferenceTests.swift */,
 				C42D0B524E5A0030EE24FF49 /* UpdateServiceTests.swift */,
 			);
@@ -298,6 +325,8 @@
 				644BBD5A402C82BEA5090851 /* AutoIntelService.swift in Sources */,
 				AF99BE4927B8333D4E8E189E /* CaptureService.swift in Sources */,
 				92C0395231C5D7664F9EF958 /* CategoryManagerWindowController.swift in Sources */,
+				311F0E9E89322C99A186B36C /* ChecklistRowView.swift in Sources */,
+				56DA9797DC951B6D0946C457 /* ChecklistViewController.swift in Sources */,
 				9E6B4AF4AC89C3159E8AE541 /* FolderWatcher.swift in Sources */,
 				F2762077DB217E71E5E65688 /* FuzzySearch.swift in Sources */,
 				9A2C154B724623EEDA2EB6CF /* HotkeyManager.swift in Sources */,
@@ -313,6 +342,8 @@
 				0C1E0486A6E092C221D653FE /* PreferencesWindowController.swift in Sources */,
 				B37DC1E25F71066404FD0466 /* ReviewToast.swift in Sources */,
 				A6B9C714CD946FF9CF30F5D2 /* SettingsSync.swift in Sources */,
+				E0E008FCBCEB5B5B33EFB562 /* TaskList.swift in Sources */,
+				B66D774E9DB1C8C4D5F0CFC6 /* TaskListRows.swift in Sources */,
 				DC6DDA37BE3D64EA09682D6F /* Theme.swift in Sources */,
 				8C50371AF57E54D18011E0F2 /* ThemedControls.swift in Sources */,
 				5061115D8FED3350D0C77278 /* ToastWindow.swift in Sources */,
@@ -327,6 +358,9 @@
 			files = (
 				FDAFB808B57E0CCCFF28A3D0 /* AutoIntelServiceTests.swift in Sources */,
 				DDA17C113C96444ECC170AF5 /* CaptureServiceTests.swift in Sources */,
+				5A40D7E39478666E48DE2E96 /* ChecklistEditorTests.swift in Sources */,
+				3F202CF382553C98D774118F /* ChecklistRowsTests.swift in Sources */,
+				7AF4D17E472FAFA819B80A6B /* ChecklistSnapshotTests.swift in Sources */,
 				23793BE184543FE6507D167D /* MarkdownRendererTests.swift in Sources */,
 				F9D46F5224BA6C2CD039901A /* NoteRowDeleteTests.swift in Sources */,
 				992471F77F1B4A1C3C0DC162 /* NoteStoreTests.swift in Sources */,
@@ -335,6 +369,8 @@
 				227CC50DEBC5583B89FC0A65 /* PreferencesManagerTests.swift in Sources */,
 				B285710C8892ABAF9B8D319B /* SearchAndNamingTests.swift in Sources */,
 				00EA001519CA94EDFAFA5DBE /* SettingsSyncTests.swift in Sources */,
+				D1F6A019C657C5CB208A2479 /* TaskListTests.swift in Sources */,
+				953592C3098E8486510A455A /* TaskToggleTests.swift in Sources */,
 				5B45DA1A806D3B0BCC7D8412 /* UIFontPreferenceTests.swift in Sources */,
 				C6D1E04CD782B80CCF66EF9A /* UpdateServiceTests.swift in Sources */,
 			);

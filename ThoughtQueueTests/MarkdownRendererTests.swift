@@ -142,4 +142,78 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertEqual(first[.foregroundColor] as? NSColor, NSColor.labelColor)
         XCTAssertNotNil(first[.font] as? NSFont)
     }
+
+    // MARK: - Task source-line mapping
+
+    /// Collect (sourceLine, characterOffset) for every distinct task run in a rendered string.
+    private func taskSourceLines(_ rendered: NSAttributedString) -> [(line: Int, offset: Int)] {
+        var found: [(line: Int, offset: Int)] = []
+        rendered.enumerateAttribute(.tqTaskSourceLine,
+                                    in: NSRange(location: 0, length: rendered.length)) { value, range, _ in
+            guard let line = value as? Int else { return }
+            if found.last?.line != line { found.append((line, range.location)) }
+        }
+        return found
+    }
+
+    func testTaskLinesCarryTheirSourceLineIndex() {
+        let rendered = MarkdownRenderer.render("- [ ] a\n- [x] b")
+        XCTAssertEqual(taskSourceLines(rendered).map(\.line), [0, 1])
+    }
+
+    /// The reason the mapping is an attribute rather than arithmetic: a table collapses several
+    /// source lines into one rendered block, so rendered position and source line diverge.
+    func testTaskSourceLineSurvivesATableAbove() {
+        let markdown = [
+            "| Name | Age |",
+            "| --- | --- |",
+            "| Ada | 36 |",
+            "| Alan | 41 |",
+            "",
+            "- [ ] first",
+            "- [x] second",
+        ].joined(separator: "\n")
+
+        let rendered = MarkdownRenderer.render(markdown)
+        let tasks = taskSourceLines(rendered)
+
+        XCTAssertEqual(tasks.map(\.line), [5, 6])
+        // Guard against a coincidental pass: the source lines must not equal the rendered
+        // character offsets, which is exactly what naive index arithmetic would produce.
+        for task in tasks {
+            XCTAssertNotEqual(task.line, task.offset)
+        }
+    }
+
+    func testTaskCheckboxAttributeCoversOnlyTheGutterAndBox() {
+        for (markdown, expected) in [("- [ ] a", "  \u{2610} "), ("- [x] a", "  \u{2611} ")] {
+            let rendered = MarkdownRenderer.render(markdown)
+            var range = NSRange(location: 0, length: 0)
+            let value = rendered.attribute(.tqTaskCheckbox, at: 0, effectiveRange: &range)
+            XCTAssertNotNil(value)
+            XCTAssertEqual(range.length, 4)
+            XCTAssertEqual((rendered.string as NSString).substring(with: range), expected)
+        }
+    }
+
+    func testNonTaskLinesCarryNoTaskAttributes() {
+        let rendered = MarkdownRenderer.render("# Heading\n- bullet\n1. numbered\nprose")
+        let full = NSRange(location: 0, length: rendered.length)
+
+        var sawTaskAttribute = false
+        rendered.enumerateAttribute(.tqTaskSourceLine, in: full) { value, _, _ in
+            if value != nil { sawTaskAttribute = true }
+        }
+        rendered.enumerateAttribute(.tqTaskCheckbox, in: full) { value, _, _ in
+            if value != nil { sawTaskAttribute = true }
+        }
+        XCTAssertFalse(sawTaskAttribute)
+    }
+
+    func testEmptyTaskLineStillRendersACheckbox() {
+        // The state an emptied item is left in; without the relaxed parse it would render as a
+        // bullet reading "[ ]".
+        XCTAssertEqual(MarkdownRenderer.render("- [ ]").string, "  \u{2610} ")
+        XCTAssertEqual(MarkdownRenderer.render("- [ ] ").string, "  \u{2610} ")
+    }
 }

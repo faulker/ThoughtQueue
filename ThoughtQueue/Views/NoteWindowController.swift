@@ -80,6 +80,13 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         return note
     }
 
+    /// Tear down every open note window. Tests only, so one case cannot leak windows into the
+    /// next; the app itself closes windows through the normal `windowWillClose` path.
+    static func closeAllForTesting() {
+        for controller in open.values { controller.window?.close() }
+        open.removeAll()
+    }
+
     /// Build, register, and front a window for `note`.
     private static func present(note: Note, startInEditMode: Bool) {
         let key = note.url.standardizedFileURL
@@ -324,10 +331,64 @@ extension NSWindow {
 /// An NSTextView that, while in read-only (rendered markdown) view mode, switches into edit
 /// mode when the user tries to type, paste, or double-click, instead of doing nothing. A
 /// single click still just selects/positions, so text stays readable and selectable.
+///
+/// Rendered task lines are the exception: a click on a checkbox toggles it and is swallowed
+/// whole, so a checklist behaves like a checkbox list rather than a markdown document that
+/// happens to show boxes. That interception happens before edit activation, so it wins even
+/// under the single-click-to-edit preference.
 final class ModeSwitchingTextView: NSTextView {
     var onActivateEditing: (() -> Void)?
     /// When true, a single click (rather than a double-click) activates editing.
     var activatesOnSingleClick = false
+
+    /// Toggle the task on this source line. Returns true when it was handled.
+    var onToggleTask: ((Int) -> Bool)?
+    /// In notes that are entirely a checklist, the whole item row toggles, not just the box.
+    var togglesWholeTaskLine = false
+
+    private var taskCursorArea: NSTrackingArea?
+
+    /// A rendered task line under the pointer.
+    struct TaskHit {
+        let sourceLine: Int
+        /// True when the point is on the gutter/box run rather than the item's text.
+        let isCheckbox: Bool
+    }
+
+    /// The task whose click target contains `point` (view coordinates), or nil.
+    ///
+    /// Only meaningful in read-only mode: edit mode shows raw markdown, which carries no task
+    /// attributes. Uses TextKit 1 geometry, which the text view opts into explicitly.
+    func taskHit(at point: NSPoint) -> TaskHit? {
+        guard !isEditable,
+              let layoutManager,
+              let textContainer,
+              let textStorage, textStorage.length > 0 else { return nil }
+
+        let p = NSPoint(x: point.x - textContainerInset.width,
+                        y: point.y - textContainerInset.height)
+
+        // Without this, a click in the empty space below the last line snaps to the final glyph
+        // and would silently toggle the last item.
+        guard p.y < layoutManager.usedRect(for: textContainer).maxY else { return nil }
+
+        var fraction: CGFloat = 0
+        let glyph = layoutManager.glyphIndex(for: p, in: textContainer,
+                                             fractionOfDistanceThroughGlyph: &fraction)
+        let fragment = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        // Vertical containment only. Horizontal snapping is wanted: a click in the left margin
+        // maps to the line's first character, which is the checkbox.
+        guard p.y >= fragment.minY, p.y < fragment.maxY else { return nil }
+
+        let charIndex = layoutManager.characterIndexForGlyph(at: glyph)
+        guard charIndex < textStorage.length else { return nil }
+
+        let attributes = textStorage.attributes(at: charIndex, effectiveRange: nil)
+        guard let line = attributes[.tqTaskSourceLine] as? Int else { return nil }
+        let isCheckbox = attributes[.tqTaskCheckbox] != nil
+        guard isCheckbox || togglesWholeTaskLine else { return nil }
+        return TaskHit(sourceLine: line, isCheckbox: isCheckbox)
+    }
 
     /// Typing while read-only activates editing, then the keystroke is applied.
     override func keyDown(with event: NSEvent) {
@@ -339,14 +400,69 @@ final class ModeSwitchingTextView: NSTextView {
         }
     }
 
-    /// A double-click (or single click, per preference) while read-only activates editing;
-    /// otherwise a single click is left to select.
+    /// A checkbox click toggles and is swallowed. Otherwise a double-click (or single click,
+    /// per preference) while read-only activates editing, and a plain single click selects.
     override func mouseDown(with event: NSEvent) {
+        if !isEditable, let hit = taskHit(at: convert(event.locationInWindow, from: nil)) {
+            if hit.isCheckbox {
+                // Return before both `onActivateEditing` and `super.mouseDown`: that is what
+                // stops the single-click-to-edit preference from stealing the click, stops a
+                // double-click from toggling and then entering edit mode, and leaves the
+                // insertion point and any existing selection untouched.
+                if event.clickCount == 1 { _ = onToggleTask?(hit.sourceLine) }
+                return
+            }
+            // Whole-row mode, on the item's text. A single click toggles, but a double-click
+            // still falls through to edit activation below: otherwise a note that is entirely
+            // checkboxes could never be edited by clicking at all.
+            if event.clickCount == 1 {
+                // Let AppKit run its drag-select loop first (it returns after mouse-up), then
+                // treat a click without a drag as a toggle.
+                super.mouseDown(with: event)
+                if selectedRange().length == 0 { _ = onToggleTask?(hit.sourceLine) }
+                return
+            }
+        }
+
         let threshold = activatesOnSingleClick ? 1 : 2
         if !isEditable, event.clickCount >= threshold, let activate = onActivateEditing {
             activate()
         }
         super.mouseDown(with: event)
+    }
+
+    // MARK: - Cursor
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let taskCursorArea { removeTrackingArea(taskCursorArea) }
+        let area = NSTrackingArea(rect: .zero,
+                                  options: [.activeInKeyWindow, .inVisibleRect, .cursorUpdate, .mouseMoved],
+                                  owner: self,
+                                  userInfo: nil)
+        addTrackingArea(area)
+        taskCursorArea = area
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        if applyTaskCursor(for: event) { return }
+        super.cursorUpdate(with: event)
+    }
+
+    /// `cursorUpdate` only fires on area entry, so moving between body text and the gutter
+    /// inside the view needs this to keep the cursor honest.
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        _ = applyTaskCursor(for: event)
+    }
+
+    /// Show a pointing hand over a clickable task. Returns true when it applied.
+    private func applyTaskCursor(for event: NSEvent) -> Bool {
+        guard !isEditable, taskHit(at: convert(event.locationInWindow, from: nil)) != nil else {
+            return false
+        }
+        NSCursor.pointingHand.set()
+        return true
     }
 
     /// Pasting while read-only activates editing so the paste has somewhere to go.
@@ -373,7 +489,7 @@ final class ToggleIconButton: NSButton {
 /// category dropdown inline in the header, above a text area that either renders markdown
 /// (view) or exposes the raw markdown for editing (edit). Title/category changes rename/move
 /// the underlying file.
-final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTextFieldDelegate {
+final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTextFieldDelegate, NSMenuItemValidation {
     private var note: Note
 
     /// Called after the note is renamed or moved (its URL changed). Passes the new note and
@@ -400,11 +516,31 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     private var navigatorButton: NSButton!
     private var categoryPopup: NSPopUpButton!
     private var scrollView: NSScrollView!
-    private var textView: ModeSwitchingTextView!
+    /// Exposed for tests, which drive the editor directly rather than synthesizing events.
+    private(set) var textView: ModeSwitchingTextView!
     private var toggleButton: NSButton!
+    /// Alternate header trailing constraints: `isHidden` does not deactivate a constraint, and
+    /// the toggle button owns the trailing edge, so hiding it would leave a gap.
+    private var toggleTrailing: NSLayoutConstraint!
+    private var pinTrailing: NSLayoutConstraint!
+    private(set) var checklist: ChecklistViewController!
+    /// The body the checklist's rows were parsed from, and the last body we wrote. The
+    /// staleness guard, mirroring `renderedBody`.
+    private var checklistBody: String?
+    private var textCommitWork: DispatchWorkItem?
     private var pinButton: ToggleIconButton!
 
-    private var isEditing = false
+    /// How the body is being presented. A list note is `.checklist`, which is not an editing
+    /// mode at all: there is no markdown document to enter or leave.
+    enum ContentMode { case checklist, rendered, raw }
+    private(set) var contentMode: ContentMode = .rendered
+    /// Set by "Edit as Markdown", cleared when the window retargets to another note.
+    private(set) var forceMarkdownForSession = false
+
+    private(set) var isEditing = false
+    /// The body the current rendered view was built from. Task source-line indices are only
+    /// valid for that exact text, so a toggle checks this before writing.
+    private var renderedBody: String?
     /// True when the raw text has unsaved changes since the last save/load.
     private var isDirty = false
     /// Backs the window's undo/redo (see `NoteWindowController.windowWillReturnUndoManager`).
@@ -495,12 +631,17 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         scrollView.backgroundColor = Theme.surface
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
-        textView = ModeSwitchingTextView()
+        // TextKit 1 on purpose. `MarkdownRenderer` emits `NSTextTable` blocks, which only
+        // TextKit 1 lays out, and checkbox hit testing needs `NSLayoutManager` geometry.
+        // A bare `NSTextView()` builds a TextKit 2 stack that falls back implicitly; opting
+        // in explicitly makes the dependency visible instead of inherited.
+        textView = ModeSwitchingTextView(usingTextLayoutManager: false)
         textView.delegate = self
         // Programmatically-created text views default this to false; without it, typing
         // never registers undo actions at all.
         textView.allowsUndo = true
         textView.onActivateEditing = { [weak self] in self?.beginEditingFromView() }
+        textView.onToggleTask = { [weak self] line in self?.toggleTask(onSourceLine: line) ?? false }
         textView.activatesOnSingleClick = PreferencesManager.shared.noteEditMode == .singleClick
         textView.font = PreferencesManager.shared.editorFont
         textView.isRichText = false
@@ -535,7 +676,6 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
 
             toggleButton.centerYAnchor.constraint(equalTo: titleField.centerYAnchor),
             toggleButton.leadingAnchor.constraint(equalTo: pinButton.trailingAnchor, constant: 8),
-            toggleButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
 
             scrollView.topAnchor.constraint(equalTo: categoryPopup.bottomAnchor, constant: 10),
             scrollView.topAnchor.constraint(greaterThanOrEqualTo: titleField.bottomAnchor, constant: 10),
@@ -543,6 +683,28 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
             scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
         ])
+
+        toggleTrailing = toggleButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16)
+        pinTrailing = pinButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16)
+        toggleTrailing.isActive = true
+
+        // The checklist is a sibling of the text view's scroll view, pinned to the same box.
+        // `addChild` also wires the responder chain, so the View menu reaches this controller
+        // from a focused item field.
+        checklist = ChecklistViewController()
+        addChild(checklist)
+        checklist.view.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(checklist.view)
+        NSLayoutConstraint.activate([
+            checklist.view.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            checklist.view.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            checklist.view.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            checklist.view.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+        ])
+        checklist.view.isHidden = true
+        checklist.onCommit = { [weak self] body, reason in
+            self?.commitChecklist(body, reason: reason)
+        }
 
         self.view = container
         NotificationCenter.default.addObserver(self, selector: #selector(onEditorFontChanged), name: .editorFontDidChange, object: nil)
@@ -553,19 +715,20 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     override func viewDidLoad() {
         super.viewDidLoad()
         rebuildCategoryMenu()
-        if startInEditMode || PreferencesManager.shared.noteEditMode == .alwaysEdit {
-            editRaw()
-        } else {
-            renderMarkdown() // default to view mode
-        }
-        updateToggle()
+        applyMode(desiredMode())
     }
 
     override func viewDidAppear() {
         super.viewDidAppear()
         // Notes opened in edit mode (new notes, or the always-edit preference) open ready to
-        // type; put the cursor in the body.
-        if startInEditMode || PreferencesManager.shared.noteEditMode == .alwaysEdit {
+        // type; put the cursor at the end of the body. Reads the mode that was actually chosen
+        // rather than re-deriving it, since checklists override the always-edit preference.
+        if contentMode == .checklist {
+            // A brand-new list opens with its one empty item ready to type. Only here, never on
+            // a reload, so nothing steals focus later.
+            if startInEditMode { checklist.focusFirstEditableRow() }
+        } else if isEditing {
+            textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
             view.window?.makeFirstResponder(textView)
         }
     }
@@ -584,6 +747,7 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         guard newNote.url.standardizedFileURL != note.url.standardizedFileURL else { return }
         commitTitleIfNeeded()
         saveIfDirty()
+        forceMarkdownForSession = false
 
         let oldKey = note.url.standardizedFileURL
         note = newNote
@@ -592,13 +756,8 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
 
         // No view lifecycle callbacks fire on a swap, so redo what viewDidLoad does. The
         // per-window `startInEditMode` is deliberately ignored: it applied to the first note.
-        if PreferencesManager.shared.noteEditMode == .alwaysEdit {
-            editRaw()
-            view.window?.makeFirstResponder(textView)
-        } else {
-            renderMarkdown()
-        }
-        updateToggle()
+        applyMode(desiredModeForSwap())
+        if isEditing { view.window?.makeFirstResponder(textView) }
 
         // Start the new note at the top rather than inheriting the old note's scroll offset.
         textView.setSelectedRange(NSRange(location: 0, length: 0))
@@ -777,15 +936,208 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         toggleButton.toolTip = tip
     }
 
-    private func renderMarkdown() {
+    // MARK: - Content mode
+
+    /// How this note should be presented right now.
+    ///
+    /// A list note is a checkbox list, so it outranks `startInEditMode` and ignores the
+    /// `noteEditMode` preference entirely: that preference describes how to get from reading
+    /// markdown to editing it, a distinction a checklist does not have.
+    private func desiredMode() -> ContentMode {
+        if forceMarkdownForSession { return .raw }
+        let body = NoteStore.shared.body(of: note)
+        // Too many rows to lay out as live controls; rendered markdown keeps boxes clickable.
+        if body.components(separatedBy: "\n").count > ChecklistViewController.maxRows {
+            return .rendered
+        }
+        if TaskList.isChecklist(body) { return .checklist }
+        if startInEditMode { return .raw }
+        return PreferencesManager.shared.noteEditMode == .alwaysEdit ? .raw : .rendered
+    }
+
+    /// Same as `desiredMode()` but ignoring `startInEditMode`, for a note swap (that flag
+    /// applied to the window's first note).
+    private func desiredModeForSwap() -> ContentMode {
+        if forceMarkdownForSession { return .raw }
+        let body = NoteStore.shared.body(of: note)
+        if body.components(separatedBy: "\n").count > ChecklistViewController.maxRows {
+            return .rendered
+        }
+        if TaskList.isChecklist(body) { return .checklist }
+        return PreferencesManager.shared.noteEditMode == .alwaysEdit ? .raw : .rendered
+    }
+
+    private func applyMode(_ mode: ContentMode) {
+        contentMode = mode
+        let isChecklist = mode == .checklist
+
+        checklist.view.isHidden = !isChecklist
+        scrollView.isHidden = isChecklist
+
+        // No pencil on a list note: there is no markdown mode to toggle into.
+        toggleButton.isHidden = isChecklist
+        toggleTrailing.isActive = !isChecklist
+        pinTrailing.isActive = isChecklist
+
+        // Only the checklist holds structured state that can silently diverge from disk.
+        NotificationCenter.default.removeObserver(self, name: .notesDidChange, object: nil)
+        if isChecklist {
+            NotificationCenter.default.addObserver(self, selector: #selector(onNotesChangedExternally),
+                                                   name: .notesDidChange, object: nil)
+        }
+
+        switch mode {
+        case .checklist:
+            isEditing = false
+            isDirty = false
+            let body = NoteStore.shared.body(of: note)
+            checklistBody = body
+            checklist.load(rows: TaskList.rows(from: body))
+        case .rendered:
+            renderMarkdown()
+        case .raw:
+            editRaw()
+        }
+        updateToggle()
+    }
+
+    // MARK: - Checklist persistence
+
+    /// Every checklist write funnels through here. Boxes and structural edits persist
+    /// immediately (cheap and rare); text edits debounce so a long typing session is not a
+    /// write per keystroke.
+    private func commitChecklist(_ body: String, reason: ChecklistViewController.CommitReason) {
+        switch reason {
+        case .checkbox, .structure, .textCommitted:
+            textCommitWork?.cancel()
+            writeChecklist(body)
+        case .text:
+            textCommitWork?.cancel()
+            let work = DispatchWorkItem { [weak self] in self?.writeChecklist(body) }
+            textCommitWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
+        }
+    }
+
+    /// Write the checklist body, refusing if the file changed underneath us since we loaded it.
+    private func writeChecklist(_ body: String) {
+        guard contentMode == .checklist else { return }
+        guard body != checklistBody else { return }
+        let onDisk = NoteStore.shared.body(of: note)
+        guard onDisk == checklistBody else {
+            checklistBody = onDisk
+            checklist.reload(from: onDisk)
+            return
+        }
+        guard NoteStore.shared.updateBody(of: note, body: body) else {
+            ToastWindow.show(message: "Save failed")
+            return
+        }
+        checklistBody = body
+    }
+
+    /// Flush a pending checklist edit (debounce or in-progress field) to disk.
+    func flushChecklist() {
+        guard contentMode == .checklist else { return }
+        textCommitWork?.cancel()
+        textCommitWork = nil
+        checklist.flushPendingEdit()
+        writeChecklist(TaskList.body(from: checklist.rows))
+    }
+
+    /// An external write landed. Ignore our own; otherwise resync the rows.
+    @objc private func onNotesChangedExternally() {
+        guard contentMode == .checklist else { return }
+        let onDisk = NoteStore.shared.body(of: note)
+        guard onDisk != checklistBody else { return }
+        guard TaskList.isChecklist(onDisk) else {
+            checklistBody = nil
+            applyMode(desiredModeForSwap())
+            return
+        }
+        checklistBody = onDisk
+        checklist.reload(from: onDisk)
+    }
+
+    /// Drop this window into raw markdown for the rest of this note's session, and back.
+    /// The deliberate escape hatch for pasting a big list or a note misdetected as a list.
+    @objc func toggleChecklistMarkdown(_ sender: Any?) {
+        if forceMarkdownForSession {
+            saveIfDirty()
+            forceMarkdownForSession = false
+            applyMode(desiredModeForSwap())
+        } else {
+            flushChecklist()
+            forceMarkdownForSession = true
+            applyMode(.raw)
+            view.window?.makeFirstResponder(textView)
+        }
+    }
+
+    /// Render the note's markdown read-only. `preservingViewport` keeps the scroll offset and
+    /// selection across the swap, which a checkbox toggle needs (the content is otherwise
+    /// identical and jumping to the top on every click would be unusable).
+    private func renderMarkdown(preservingViewport: Bool = false) {
         isEditing = false
         isDirty = false
         textView.isEditable = false
         textView.isSelectable = true
+
+        let origin = scrollView.contentView.bounds.origin
+        let ranges = textView.selectedRanges
+
         let body = NoteStore.shared.body(of: note)
+        renderedBody = body
+        // A note that is entirely tasks is a checkbox list, so the whole row is a target.
+        textView.togglesWholeTaskLine = TaskList.isChecklist(body)
+
         let attributed = MarkdownRenderer.render(body, baseFont: PreferencesManager.shared.editorFont)
         textView.textStorage?.setAttributedString(attributed)
         noteUndoManager.removeAllActions()
+
+        if preservingViewport {
+            // setAttributedString invalidates layout, so the document view is momentarily short
+            // and an un-forced scroll would clamp to the top.
+            if let container = textView.textContainer {
+                textView.layoutManager?.ensureLayout(for: container)
+            }
+            let length = (textView.string as NSString).length
+            let clamped = ranges.compactMap { value -> NSValue? in
+                let range = value.rangeValue
+                guard range.location <= length else { return nil }
+                return NSValue(range: NSRange(location: range.location,
+                                              length: min(range.length, length - range.location)))
+            }
+            if !clamped.isEmpty { textView.selectedRanges = clamped }
+            scrollView.contentView.scroll(to: origin)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
+    }
+
+    // MARK: - Checkboxes
+
+    /// Toggle the checkbox on source line `line` of the current note, write it, and re-render in
+    /// place. Returns false when nothing was toggled.
+    ///
+    /// No "Saved" toast here on purpose: one toast per checkbox click is noise.
+    @discardableResult
+    func toggleTask(onSourceLine line: Int) -> Bool {
+        guard !isEditing else { return false }
+
+        let onDisk = NoteStore.shared.body(of: note)
+        // Changed underneath us since we rendered, so the line indices we stamped are stale.
+        // Resync rather than write to a guessed line.
+        guard onDisk == renderedBody else {
+            renderMarkdown()
+            return false
+        }
+        guard let updated = TaskList.toggle(body: onDisk, lineIndex: line) else { return false }
+        guard NoteStore.shared.updateBody(of: note, body: updated) else {
+            ToastWindow.show(message: "Save failed")
+            return false
+        }
+        renderMarkdown(preservingViewport: true)
+        return true
     }
 
     private func editRaw() {
@@ -807,13 +1159,124 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     /// Re-apply a changed editor font to whichever mode is active.
     @objc private func onEditorFontChanged() {
         textView.font = PreferencesManager.shared.editorFont
-        if !isEditing { renderMarkdown() }
+        switch contentMode {
+        case .checklist:
+            // Rows build their fields from the editor font, so rebuild them.
+            checklist.load(rows: checklist.rows)
+        case .rendered:
+            renderMarkdown()
+        case .raw:
+            break
+        }
     }
 
     // MARK: - Autosave
 
     func textDidChange(_ notification: Notification) {
         if isEditing { isDirty = true }
+    }
+
+    // MARK: - Typing task lines
+
+    /// Turn the caret's line into a task, or flip one that already is (Shift+Cmd+L).
+    /// A no-op in view mode, where clicking a checkbox already covers it.
+    @objc func toggleTaskMarker(_ sender: Any?) {
+        if contentMode == .checklist {
+            checklist.toggleFocusedRow()
+            return
+        }
+        guard isEditing else { return }
+
+        let ns = textView.string as NSString
+        let selection = textView.selectedRange()
+        let lineRange = ns.lineRange(for: NSRange(location: selection.location, length: 0))
+        let column = selection.location - lineRange.location
+
+        // Which source line the caret sits on, counting the newlines before it.
+        let index = ns.substring(to: lineRange.location).components(separatedBy: "\n").count - 1
+        guard let updated = TaskList.toggleOrPromote(body: textView.string, lineIndex: index) else { return }
+        guard updated != textView.string else { return }
+
+        let whole = NSRange(location: 0, length: ns.length)
+        textView.breakUndoCoalescing()
+        guard textView.shouldChangeText(in: whole, replacementString: updated) else { return }
+        textView.textStorage?.replaceCharacters(in: whole, with: updated)
+        textView.didChangeText()
+
+        // Keep the caret at the same column, shifted by however much the prefix grew or shrank.
+        let newLength = (updated as NSString).length
+        let delta = newLength - ns.length
+        let restored = min(max(lineRange.location + column + delta, 0), newLength)
+        textView.setSelectedRange(NSRange(location: restored, length: 0))
+    }
+
+    /// Enable the Edit menu's Toggle Task item only while editing raw markdown.
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == Selector(("toggleChecklistMarkdown:")) {
+            menuItem.title = forceMarkdownForSession ? "Edit as Checklist" : "Edit as Markdown"
+            return contentMode == .checklist || forceMarkdownForSession
+        }
+        if menuItem.action == Selector(("toggleTaskMarker:")) {
+            return isEditing || contentMode == .checklist
+        }
+        return true
+    }
+
+    /// Intercept Return so typing a checklist continues it. Everything else falls through.
+    func textView(_ view: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        guard commandSelector == #selector(NSResponder.insertNewline(_:)), isEditing else {
+            return false
+        }
+        return continueTaskList()
+    }
+
+    /// Handle Return on a task line: continue the list, or clear an empty item to end it.
+    /// Returns false to let AppKit insert a plain newline.
+    func continueTaskList() -> Bool {
+        let selection = textView.selectedRange()
+        // Return over a selection is a plain replace, not a list continuation.
+        guard selection.length == 0 else { return false }
+
+        let ns = textView.string as NSString
+        let lineRange = ns.lineRange(for: selection)
+        // The line without its terminator, plus the range that content occupies.
+        var contentLength = lineRange.length
+        while contentLength > 0 {
+            let character = ns.character(at: lineRange.location + contentLength - 1)
+            guard character == 0x0A || character == 0x0D else { break }
+            contentLength -= 1
+        }
+        let contentRange = NSRange(location: lineRange.location, length: contentLength)
+        let line = ns.substring(with: contentRange)
+
+        // Only continue from the end of the line; Return mid-item just splits it.
+        guard selection.location >= NSMaxRange(contentRange) else { return false }
+
+        let target: NSRange
+        let replacement: String
+        switch TaskList.returnAction(for: line) {
+        case .pass:
+            return false
+        case .continueList(let prefix):
+            target = NSRange(location: selection.location, length: 0)
+            replacement = "\n" + prefix
+        case .clearMarker:
+            // Wipe the empty item in place rather than adding another one below it.
+            target = contentRange
+            replacement = ""
+        }
+
+        // breakUndoCoalescing is load-bearing: without it the inserted item merges into the
+        // preceding typing group, and one Cmd+Z would rip out the whole item plus its text.
+        textView.breakUndoCoalescing()
+        guard textView.shouldChangeText(in: target, replacementString: replacement) else {
+            return true
+        }
+        textView.textStorage?.replaceCharacters(in: target, with: replacement)
+        textView.didChangeText()
+        textView.setSelectedRange(NSRange(location: target.location + (replacement as NSString).length,
+                                          length: 0))
+        return true
     }
 
     func textDidEndEditing(_ notification: Notification) {
@@ -827,6 +1290,7 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
 
     /// Persist the current raw text if we're editing and have unsaved changes.
     func saveIfDirty() {
+        flushChecklist()
         guard isEditing, isDirty else { return }
         _ = NoteStore.shared.updateBody(of: note, body: textView.string)
         isDirty = false

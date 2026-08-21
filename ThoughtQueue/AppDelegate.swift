@@ -177,6 +177,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
         editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
         editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editMenu.addItem(NSMenuItem.separator())
+        // Nil target, same responder-chain dispatch as the View menu item below: turns the
+        // caret's line into a task, or flips one that already is.
+        let taskItem = NSMenuItem(title: "Toggle Task", action: Selector(("toggleTaskMarker:")), keyEquivalent: "l")
+        taskItem.keyEquivalentModifierMask = [.shift, .command]
+        taskItem.target = nil
+        editMenu.addItem(taskItem)
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
 
@@ -188,6 +195,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         navigatorItem.keyEquivalentModifierMask = [.control, .command]
         navigatorItem.target = nil
         viewMenu.addItem(navigatorItem)
+        // The deliberate escape hatch out of a checklist: a command rather than a button, so a
+        // list note's editor stays purely a checkbox list.
+        let markdownItem = NSMenuItem(title: "Edit as Markdown",
+                                      action: Selector(("toggleChecklistMarkdown:")), keyEquivalent: "m")
+        markdownItem.keyEquivalentModifierMask = [.shift, .command]
+        markdownItem.target = nil
+        viewMenu.addItem(markdownItem)
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)
 

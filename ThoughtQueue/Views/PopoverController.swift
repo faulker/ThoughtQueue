@@ -75,6 +75,10 @@ final class PopoverViewController: NSViewController {
         let addButton = ThemedButton(title: "+ Add", prominent: true, target: self, action: #selector(addNote))
         container.addSubview(addButton)
 
+        // Secondary styling keeps "+ Add" the primary action; this one starts a checkbox list.
+        let listButton = ThemedButton(title: "+ List", prominent: false, target: self, action: #selector(addChecklist))
+        container.addSubview(listButton)
+
         let separator = NSBox()
         separator.boxType = .separator
         separator.translatesAutoresizingMaskIntoConstraints = false
@@ -134,9 +138,14 @@ final class PopoverViewController: NSViewController {
             separator.bottomAnchor.constraint(equalTo: addButton.topAnchor, constant: -10),
 
             addButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
-            addButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
             addButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10),
             addButton.heightAnchor.constraint(equalToConstant: Theme.metric(32)),
+
+            // Equal halves of the bottom bar. ThemedButton installs its own height constraint.
+            listButton.leadingAnchor.constraint(equalTo: addButton.trailingAnchor, constant: 8),
+            listButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            listButton.widthAnchor.constraint(equalTo: addButton.widthAnchor),
+            listButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10),
         ])
 
         self.view = container
@@ -194,6 +203,12 @@ final class PopoverViewController: NSViewController {
     @objc private func addNote() {
         onRequestClose?()
         NoteWindowController.showNew()
+    }
+
+    /// Start a checkbox list: an ordinary note pre-filled with one empty task item.
+    @objc private func addChecklist() {
+        onRequestClose?()
+        NoteWindowController.showNew(body: TaskList.newItemPrefix)
     }
 }
 

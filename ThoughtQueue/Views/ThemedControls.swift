@@ -251,3 +251,129 @@ final class SegmentedPillControl: NSView {
         }
     }
 }
+
+/// A custom-drawn checkbox in the Organic palette: a soft accent fill with an accent checkmark
+/// when on, a bordered box on the surface color when off, centered in a generous square hit
+/// target that grows with the interface text-size preference.
+///
+/// Drawn in `draw(_:)` rather than through `updateLayer()` because it strokes a box and a
+/// checkmark rather than filling one rectangle. Drawing with live `NSColor`s (not cached
+/// `cgColor`s) is also what keeps it correct across light/dark appearance changes.
+final class ThemedCheckbox: NSButton {
+    var isChecked = false {
+        didSet {
+            guard isChecked != oldValue else { return }
+            state = isChecked ? .on : .off
+            setAccessibilityValue(isChecked)
+            needsDisplay = true
+        }
+    }
+
+    /// Fires on a click or a Space/Return press, with the new state.
+    var onToggle: ((Bool) -> Void)?
+
+    private var hovering = false {
+        didSet {
+            guard hovering != oldValue else { return }
+            needsDisplay = true
+        }
+    }
+    private var trackingArea: NSTrackingArea?
+
+    init() {
+        super.init(frame: .zero)
+        title = ""
+        isBordered = false
+        setButtonType(.toggle)
+        translatesAutoresizingMaskIntoConstraints = false
+        target = self
+        action = #selector(clicked)
+        setAccessibilityRole(.checkBox)
+        setAccessibilityValue(false)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: Theme.metric(28), height: Theme.metric(28))
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+    override func becomeFirstResponder() -> Bool { needsDisplay = true; return super.becomeFirstResponder() }
+    override func resignFirstResponder() -> Bool { needsDisplay = true; return super.resignFirstResponder() }
+
+    @objc private func clicked() {
+        isChecked.toggle()
+        onToggle?(isChecked)
+    }
+
+    /// Space and Return toggle while focused; everything else falls through so the checklist's
+    /// arrow-key navigation still works.
+    override func keyDown(with event: NSEvent) {
+        if event.charactersIgnoringModifiers == " " || event.keyCode == 36 {
+            clicked()
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(rect: .zero,
+                                  options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+                                  owner: self,
+                                  userInfo: nil)
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseExited(with event: NSEvent) { hovering = false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let side = Theme.metric(16)
+        let box = NSRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2,
+                         width: side, height: side)
+        let radius = max(Theme.radiusSmall - 2, 2)
+        let path = NSBezierPath(roundedRect: box, xRadius: radius, yRadius: radius)
+
+        if isChecked {
+            Theme.accentSoftBackground.setFill()
+            Theme.accentBorder.setStroke()
+        } else {
+            (hovering ? Theme.hoverRow : Theme.surface).setFill()
+            (hovering ? Theme.accentSoftBorder : Theme.fieldBorder).setStroke()
+        }
+        path.fill()
+        path.lineWidth = 1
+        path.stroke()
+
+        if isChecked {
+            // Built from the box's own top/bottom rather than raw minY/maxY, so the tick reads
+            // the same way whichever vertical direction the drawing context runs in.
+            let low = isFlipped ? box.maxY : box.minY
+            let high = isFlipped ? box.minY : box.maxY
+            let toward: (CGFloat, CGFloat) -> CGFloat = { edge, amount in
+                edge + (self.isFlipped ? -amount : amount)
+            }
+            let check = NSBezierPath()
+            check.move(to: NSPoint(x: box.minX + side * 0.24, y: toward(low, side * 0.52)))
+            check.line(to: NSPoint(x: box.minX + side * 0.43, y: toward(low, side * 0.26)))
+            check.line(to: NSPoint(x: box.maxX - side * 0.20, y: toward(high, -side * 0.25)))
+            check.lineWidth = max(Theme.metric(2), 1.5)
+            check.lineCapStyle = .round
+            check.lineJoinStyle = .round
+            Theme.accentBorder.setStroke()
+            check.stroke()
+        }
+
+        if window?.firstResponder === self {
+            let ring = NSBezierPath(roundedRect: box.insetBy(dx: -3, dy: -3),
+                                    xRadius: radius + 3, yRadius: radius + 3)
+            ring.lineWidth = 2
+            Theme.accent.setStroke()
+            ring.stroke()
+        }
+    }
+}

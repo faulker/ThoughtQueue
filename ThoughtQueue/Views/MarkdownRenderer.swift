@@ -1,5 +1,14 @@
 import Cocoa
 
+extension NSAttributedString.Key {
+    /// Zero-based index of the *source* markdown line a rendered task came from, carried on the
+    /// whole rendered task line. Rendered position is not the source line: a table collapses
+    /// several source lines into one block, so this attribute is the mapping click handling uses.
+    static let tqTaskSourceLine = NSAttributedString.Key("tqTaskSourceLine")
+    /// Marks the gutter plus box-glyph run, which is the primary click target.
+    static let tqTaskCheckbox = NSAttributedString.Key("tqTaskCheckbox")
+}
+
 /// Renders block-level markdown to an NSAttributedString for read-only display.
 /// Apple's `NSAttributedString(markdown:)` flattens block structure (headings/lists become
 /// plain text). This renderer handles the blocks ThoughtQueue actually uses: headings,
@@ -25,7 +34,7 @@ enum MarkdownRenderer {
                 continue
             }
 
-            let attributed = renderLine(lines[index], baseFont: baseFont)
+            let attributed = renderLine(lines[index], baseFont: baseFont, sourceLine: index)
             result.append(attributed)
             if index < lines.count - 1 {
                 // Attribute the separator: an unattributed run leaks into raw edit mode,
@@ -41,7 +50,7 @@ enum MarkdownRenderer {
     }
 
     /// Render a single line as a block element.
-    private static func renderLine(_ line: String, baseFont: NSFont) -> NSAttributedString {
+    private static func renderLine(_ line: String, baseFont: NSFont, sourceLine: Int) -> NSAttributedString {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
 
         // Task checkboxes: - [ ] / - [x]  (rendered with a visible box glyph).
@@ -59,7 +68,16 @@ enum MarkdownRenderer {
                                   range: NSRange(location: 0, length: body.length))
             }
             combined.append(body)
-            return prefixed("  ", combined, baseFont: baseFont)
+
+            // Stamp the source line over the whole item (so a checklist can make the entire row
+            // a target) and mark the gutter plus box separately (the always-clickable part).
+            let wrapped = NSMutableAttributedString(attributedString: prefixed("  ", combined, baseFont: baseFont))
+            let gutterLength = ("  " as NSString).length + (box as NSString).length
+            wrapped.addAttribute(.tqTaskSourceLine, value: sourceLine,
+                                 range: NSRange(location: 0, length: wrapped.length))
+            wrapped.addAttribute(.tqTaskCheckbox, value: true,
+                                 range: NSRange(location: 0, length: min(gutterLength, wrapped.length)))
+            return wrapped
         }
 
         // Headings: #, ##, ### ...
@@ -270,10 +288,13 @@ enum MarkdownRenderer {
 
     static func parseTask(_ line: String) -> Task? {
         // - [ ] text   |   - [x] text   (also * and +)
-        let pattern = #"^[-*+]\s+\[([ xX])\]\s+(.*)$"#
+        // The trailing text is optional so a bare `- [ ]` (no trailing space) still reads as a
+        // checkbox. That is the state an emptied item is left in, and without this it would fall
+        // through to `parseBullet` and render as a bullet reading "[ ]".
+        let pattern = #"^[-*+]\s+\[([ xX])\](?:\s+(.*))?$"#
         guard let m = firstMatch(line, pattern) else { return nil }
         let mark = m[1].lowercased()
-        return Task(checked: mark == "x", text: m[2])
+        return Task(checked: mark == "x", text: m.count > 2 ? m[2] : "")
     }
 
     static func parseHeading(_ line: String) -> Heading? {
