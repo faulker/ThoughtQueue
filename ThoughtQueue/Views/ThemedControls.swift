@@ -259,6 +259,58 @@ final class SegmentedPillControl: NSView {
 /// Drawn in `draw(_:)` rather than through `updateLayer()` because it strokes a box and a
 /// checkmark rather than filling one rectangle. Drawing with live `NSColor`s (not cached
 /// `cgColor`s) is also what keeps it correct across light/dark appearance changes.
+/// The checkbox drawing itself, factored out of `ThemedCheckbox` so the rendered-markdown
+/// view can draw the identical box. A checkbox has to look the same everywhere it appears; the
+/// small system glyph the renderer used to emit was visibly a different control.
+enum CheckboxGlyph {
+
+    /// Box side for a checkbox drawn inline in text of `pointSize`. Tracks the font so the box
+    /// stays proportional when the editor font is scaled.
+    static func side(forPointSize pointSize: CGFloat) -> CGFloat {
+        max(round(pointSize * 1.05), 10)
+    }
+
+    /// Draw a box of `side` points centred in `bounds`, plus its tick when checked.
+    /// `flipped` is the drawing context's orientation, which differs between a plain view and a
+    /// text view's layout pass; the tick is built from the box's own top/bottom either way.
+    static func draw(in bounds: NSRect, side: CGFloat, checked: Bool, hovering: Bool, flipped: Bool) {
+        let box = NSRect(x: bounds.minX + (bounds.width - side) / 2,
+                         y: bounds.minY + (bounds.height - side) / 2,
+                         width: side, height: side)
+        let radius = max(Theme.radiusSmall - 2, 2)
+        let path = NSBezierPath(roundedRect: box, xRadius: radius, yRadius: radius)
+
+        if checked {
+            Theme.accentSoftBackground.setFill()
+            Theme.accentBorder.setStroke()
+        } else {
+            (hovering ? Theme.hoverRow : Theme.surface).setFill()
+            (hovering ? Theme.accentSoftBorder : Theme.fieldBorder).setStroke()
+        }
+        path.fill()
+        path.lineWidth = 1
+        path.stroke()
+
+        guard checked else { return }
+        // Built from the box's own top/bottom rather than raw minY/maxY, so the tick reads
+        // the same way whichever vertical direction the drawing context runs in.
+        let low = flipped ? box.maxY : box.minY
+        let high = flipped ? box.minY : box.maxY
+        let toward: (CGFloat, CGFloat) -> CGFloat = { edge, amount in
+            edge + (flipped ? -amount : amount)
+        }
+        let check = NSBezierPath()
+        check.move(to: NSPoint(x: box.minX + side * 0.24, y: toward(low, side * 0.52)))
+        check.line(to: NSPoint(x: box.minX + side * 0.43, y: toward(low, side * 0.26)))
+        check.line(to: NSPoint(x: box.maxX - side * 0.20, y: toward(high, -side * 0.25)))
+        check.lineWidth = max(side / 8, 1.5)
+        check.lineCapStyle = .round
+        check.lineJoinStyle = .round
+        Theme.accentBorder.setStroke()
+        check.stroke()
+    }
+}
+
 final class ThemedCheckbox: NSButton {
     var isChecked = false {
         didSet {
@@ -333,42 +385,13 @@ final class ThemedCheckbox: NSButton {
 
     override func draw(_ dirtyRect: NSRect) {
         let side = Theme.metric(16)
-        let box = NSRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2,
-                         width: side, height: side)
-        let radius = max(Theme.radiusSmall - 2, 2)
-        let path = NSBezierPath(roundedRect: box, xRadius: radius, yRadius: radius)
-
-        if isChecked {
-            Theme.accentSoftBackground.setFill()
-            Theme.accentBorder.setStroke()
-        } else {
-            (hovering ? Theme.hoverRow : Theme.surface).setFill()
-            (hovering ? Theme.accentSoftBorder : Theme.fieldBorder).setStroke()
-        }
-        path.fill()
-        path.lineWidth = 1
-        path.stroke()
-
-        if isChecked {
-            // Built from the box's own top/bottom rather than raw minY/maxY, so the tick reads
-            // the same way whichever vertical direction the drawing context runs in.
-            let low = isFlipped ? box.maxY : box.minY
-            let high = isFlipped ? box.minY : box.maxY
-            let toward: (CGFloat, CGFloat) -> CGFloat = { edge, amount in
-                edge + (self.isFlipped ? -amount : amount)
-            }
-            let check = NSBezierPath()
-            check.move(to: NSPoint(x: box.minX + side * 0.24, y: toward(low, side * 0.52)))
-            check.line(to: NSPoint(x: box.minX + side * 0.43, y: toward(low, side * 0.26)))
-            check.line(to: NSPoint(x: box.maxX - side * 0.20, y: toward(high, -side * 0.25)))
-            check.lineWidth = max(Theme.metric(2), 1.5)
-            check.lineCapStyle = .round
-            check.lineJoinStyle = .round
-            Theme.accentBorder.setStroke()
-            check.stroke()
-        }
+        CheckboxGlyph.draw(in: bounds, side: side, checked: isChecked,
+                           hovering: hovering, flipped: isFlipped)
 
         if window?.firstResponder === self {
+            let box = NSRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2,
+                             width: side, height: side)
+            let radius = max(Theme.radiusSmall - 2, 2)
             let ring = NSBezierPath(roundedRect: box.insetBy(dx: -3, dy: -3),
                                     xRadius: radius + 3, yRadius: radius + 3)
             ring.lineWidth = 2

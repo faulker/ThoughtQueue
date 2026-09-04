@@ -70,9 +70,14 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     /// Create a brand-new note (empty by default, or pre-filled with `body`) and open the
     /// same editor window in edit mode. Used by "New Note" and detailed capture so there is a
     /// single note window for both creating and viewing/editing.
+    ///
+    /// `docType` is recorded on the new note, so "+ Add" makes a markdown document that stays
+    /// one and "+ List" makes a checkbox list that stays one.
     @discardableResult
-    static func showNew(body: String = "", category: String? = nil) -> Note? {
-        guard let note = NoteStore.shared.createNote(title: "", body: body, category: category) else {
+    static func showNew(body: String = "", category: String? = nil,
+                        docType: NoteDocType = .markdown) -> Note? {
+        guard let note = NoteStore.shared.createNote(title: "", body: body, category: category,
+                                                     docType: docType) else {
             ToastWindow.show(message: "Failed to create note")
             return nil
         }
@@ -854,7 +859,8 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     }
 
     /// Move the note file into `category` (nil = Uncategorized) and sync UI/state.
-    private func performMove(to category: String?) {
+    /// Internal rather than private so tests can drive the whole move path directly.
+    func performMove(to category: String?) {
         saveIfDirty()
         let oldKey = note.url.standardizedFileURL
         guard let moved = NoteStore.shared.move(note, to: category) else {
@@ -943,27 +949,31 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     /// A list note is a checkbox list, so it outranks `startInEditMode` and ignores the
     /// `noteEditMode` preference entirely: that preference describes how to get from reading
     /// markdown to editing it, a distinction a checklist does not have.
+    /// Whether this note is a checkbox list, per its recorded document type (falling back to
+    /// inferring one from the content when nothing was recorded).
+    private var isListNote: Bool {
+        NoteStore.shared.docType(of: note) == .checklist
+    }
+
     private func desiredMode() -> ContentMode {
+        desiredMode(honoringStartInEditMode: true)
+    }
+
+    /// Same as `desiredMode()` but ignoring `startInEditMode`, for a note swap (that flag
+    /// applied to the window's first note).
+    private func desiredModeForSwap() -> ContentMode {
+        desiredMode(honoringStartInEditMode: false)
+    }
+
+    private func desiredMode(honoringStartInEditMode: Bool) -> ContentMode {
         if forceMarkdownForSession { return .raw }
         let body = NoteStore.shared.body(of: note)
         // Too many rows to lay out as live controls; rendered markdown keeps boxes clickable.
         if body.components(separatedBy: "\n").count > ChecklistViewController.maxRows {
             return .rendered
         }
-        if TaskList.isChecklist(body) { return .checklist }
-        if startInEditMode { return .raw }
-        return PreferencesManager.shared.noteEditMode == .alwaysEdit ? .raw : .rendered
-    }
-
-    /// Same as `desiredMode()` but ignoring `startInEditMode`, for a note swap (that flag
-    /// applied to the window's first note).
-    private func desiredModeForSwap() -> ContentMode {
-        if forceMarkdownForSession { return .raw }
-        let body = NoteStore.shared.body(of: note)
-        if body.components(separatedBy: "\n").count > ChecklistViewController.maxRows {
-            return .rendered
-        }
-        if TaskList.isChecklist(body) { return .checklist }
+        if NoteStore.shared.docType(of: note) == .checklist { return .checklist }
+        if honoringStartInEditMode && startInEditMode { return .raw }
         return PreferencesManager.shared.noteEditMode == .alwaysEdit ? .raw : .rendered
     }
 
@@ -1046,11 +1056,17 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     }
 
     /// An external write landed. Ignore our own; otherwise resync the rows.
+    ///
+    /// A move or rename we started also posts `.notesDidChange`, from inside `NoteStore` and so
+    /// *before* `applyNoteChange` swaps in the new URL. For that instant `note.url` names a file
+    /// that no longer exists, and reading it would hand us an empty body and blank the list.
+    /// The file's absence is the tell: bail out and let `applyNoteChange` land the new URL.
     @objc private func onNotesChangedExternally() {
         guard contentMode == .checklist else { return }
+        guard FileManager.default.fileExists(atPath: note.url.path) else { return }
         let onDisk = NoteStore.shared.body(of: note)
         guard onDisk != checklistBody else { return }
-        guard TaskList.isChecklist(onDisk) else {
+        guard NoteStore.shared.docType(of: note) == .checklist else {
             checklistBody = nil
             applyMode(desiredModeForSwap())
             return
@@ -1059,18 +1075,23 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         checklist.reload(from: onDisk)
     }
 
-    /// Drop this window into raw markdown for the rest of this note's session, and back.
-    /// The deliberate escape hatch for pasting a big list or a note misdetected as a list.
+    /// Convert this note between a checkbox list and a markdown document, and record the
+    /// choice. The document type is metadata, not a guess about the content, so the note stays
+    /// what the user said it is even after they type a checkbox into a prose note (or prose
+    /// into a list). `forceMarkdownForSession` still drops the *view* straight into raw
+    /// markdown, which is what someone reaching for this command wants to see.
     @objc func toggleChecklistMarkdown(_ sender: Any?) {
-        if forceMarkdownForSession {
-            saveIfDirty()
-            forceMarkdownForSession = false
-            applyMode(desiredModeForSwap())
-        } else {
+        if contentMode == .checklist {
             flushChecklist()
+            NoteStore.shared.setDocType(.markdown, of: note)
             forceMarkdownForSession = true
             applyMode(.raw)
             view.window?.makeFirstResponder(textView)
+        } else {
+            saveIfDirty()
+            NoteStore.shared.setDocType(.checklist, of: note)
+            forceMarkdownForSession = false
+            applyMode(desiredModeForSwap())
         }
     }
 
@@ -1088,8 +1109,9 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
 
         let body = NoteStore.shared.body(of: note)
         renderedBody = body
-        // A note that is entirely tasks is a checkbox list, so the whole row is a target.
-        textView.togglesWholeTaskLine = TaskList.isChecklist(body)
+        // A list note makes the whole row a target; a document that merely contains tasks
+        // keeps the box itself as the only click target.
+        textView.togglesWholeTaskLine = NoteStore.shared.docType(of: note) == .checklist
 
         let attributed = MarkdownRenderer.render(body, baseFont: PreferencesManager.shared.editorFont)
         textView.textStorage?.setAttributedString(attributed)
@@ -1213,8 +1235,12 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     /// Enable the Edit menu's Toggle Task item only while editing raw markdown.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == Selector(("toggleChecklistMarkdown:")) {
-            menuItem.title = forceMarkdownForSession ? "Edit as Checklist" : "Edit as Markdown"
-            return contentMode == .checklist || forceMarkdownForSession
+            let isList = contentMode == .checklist
+            menuItem.title = isList ? "Edit as Markdown" : "Edit as Checklist"
+            // Converting *to* a list only makes sense for a body that is all task lines;
+            // converting away from one is always available.
+            return isList || forceMarkdownForSession
+                || TaskList.isChecklist(NoteStore.shared.body(of: note))
         }
         if menuItem.action == Selector(("toggleTaskMarker:")) {
             return isEditing || contentMode == .checklist

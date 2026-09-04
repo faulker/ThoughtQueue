@@ -186,10 +186,15 @@ final class MarkdownRendererTests: XCTestCase {
     }
 
     func testTaskCheckboxAttributeCoversOnlyTheGutterAndBox() {
-        for (markdown, expected) in [("- [ ] a", "  \u{2610} "), ("- [x] a", "  \u{2611} ")] {
+        let expected = "  " + MarkdownRenderer.checkboxPlaceholder
+        for markdown in ["- [ ] a", "- [x] a"] {
             let rendered = MarkdownRenderer.render(markdown)
             var range = NSRange(location: 0, length: 0)
-            let value = rendered.attribute(.tqTaskCheckbox, at: 0, effectiveRange: &range)
+            // Longest, not effective: the checkbox attachment carries its own attribute, which
+            // splits the run without ending the checkbox region.
+            let value = rendered.attribute(.tqTaskCheckbox, at: 0,
+                                           longestEffectiveRange: &range,
+                                           in: NSRange(location: 0, length: rendered.length))
             XCTAssertNotNil(value)
             XCTAssertEqual(range.length, 4)
             XCTAssertEqual((rendered.string as NSString).substring(with: range), expected)
@@ -213,7 +218,20 @@ final class MarkdownRendererTests: XCTestCase {
     func testEmptyTaskLineStillRendersACheckbox() {
         // The state an emptied item is left in; without the relaxed parse it would render as a
         // bullet reading "[ ]".
-        XCTAssertEqual(MarkdownRenderer.render("- [ ]").string, "  \u{2610} ")
-        XCTAssertEqual(MarkdownRenderer.render("- [ ] ").string, "  \u{2610} ")
+        let expected = "  " + MarkdownRenderer.checkboxPlaceholder
+        XCTAssertEqual(MarkdownRenderer.render("- [ ]").string, expected)
+        XCTAssertEqual(MarkdownRenderer.render("- [ ] ").string, expected)
+    }
+
+    /// The box is the same drawn control the checklist editor uses, not a text glyph: rendered
+    /// markdown used to emit a small system box that visibly did not match.
+    func testCheckboxIsADrawnAttachmentMatchingTheChecklistControl() throws {
+        for (markdown, checked) in [("- [ ] a", false), ("- [x] a", true)] {
+            let rendered = MarkdownRenderer.render(markdown)
+            let attachment = try XCTUnwrap(
+                rendered.attribute(.attachment, at: 2, effectiveRange: nil) as? NSTextAttachment)
+            let cell = try XCTUnwrap(attachment.attachmentCell as? CheckboxAttachmentCell)
+            XCTAssertEqual(cell.checked, checked)
+        }
     }
 }

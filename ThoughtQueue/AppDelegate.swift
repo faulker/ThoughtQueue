@@ -291,20 +291,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showContextMenu() {
         guard let statusItem = statusItem else { return }
-        let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Categories\u{2026}", action: #selector(openCategoryManager), keyEquivalent: ""))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Preferences\u{2026}", action: #selector(openPreferences), keyEquivalent: ","))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApp.terminate), keyEquivalent: "q"))
+        let menu = buildContextMenu()
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
     }
 
+    /// The right-click menu. Built separately from showing it so its contents are testable.
+    func buildContextMenu() -> NSMenu {
+        let menu = NSMenu()
+        // Items dispatch up the responder chain to this delegate, as they always have, so
+        // enablement is ours to set rather than AppKit's to infer.
+        menu.autoenablesItems = false
+        menu.addItem(NSMenuItem(title: "Categories\u{2026}", action: #selector(openCategoryManager), keyEquivalent: ""))
+        let folderItem = NSMenuItem(title: "Open Notes Folder", action: #selector(openStoreFolder), keyEquivalent: "")
+        // Nothing to reveal until the store root is known (first run, before the chooser).
+        folderItem.isEnabled = NoteStore.shared.rootURL != nil
+        menu.addItem(folderItem)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Preferences\u{2026}", action: #selector(openPreferences), keyEquivalent: ","))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApp.terminate), keyEquivalent: "q"))
+        return menu
+    }
+
     @objc private func openCategoryManager() {
         CategoryManagerWindowController.shared.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Reveal the store folder in Finder: the directory holding every note file.
+    @objc func openStoreFolder() {
+        guard let root = NoteStore.shared.rootURL else {
+            ToastWindow.show(message: "No notes folder set")
+            return
+        }
+        guard FileManager.default.fileExists(atPath: root.path) else {
+            ToastWindow.show(message: "Notes folder is missing")
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([root])
     }
 
     @objc private func openPreferences() {

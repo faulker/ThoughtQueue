@@ -73,7 +73,8 @@ final class CaptureService {
 
         // Otherwise create a new note. Default category = working doc's folder, else Uncategorized.
         let defaultCategory = defaultCategoryFromWorkingDoc()
-        guard let note = store.createNote(title: "", body: text, category: defaultCategory) else {
+        guard let note = store.createNote(title: "", body: text, category: defaultCategory,
+                                          docType: .markdown) else {
             ToastWindow.show(message: "Failed to save")
             return .failed
         }

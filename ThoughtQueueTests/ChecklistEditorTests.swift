@@ -22,8 +22,10 @@ final class ChecklistEditorTests: XCTestCase {
         NoteStore.shared.rootURL = nil
     }
 
-    private func makeEditor(body: String, startInEditMode: Bool = false) throws -> (NoteEditorViewController, Note) {
-        let note = try XCTUnwrap(NoteStore.shared.createNote(title: "List", body: body, category: nil))
+    private func makeEditor(body: String, startInEditMode: Bool = false,
+                            docType: NoteDocType? = .checklist) throws -> (NoteEditorViewController, Note) {
+        let note = try XCTUnwrap(NoteStore.shared.createNote(title: "List", body: body,
+                                                             category: nil, docType: docType))
         let vc = NoteEditorViewController(note: note, startInEditMode: startInEditMode)
         _ = vc.view
         return (vc, note)
@@ -54,18 +56,22 @@ final class ChecklistEditorTests: XCTestCase {
         }
     }
 
-    func testProseAndMixedNotesDoNotGetTheChecklist() throws {
-        let (prose, _) = try makeEditor(body: "just prose\n")
-        XCTAssertNotEqual(prose.contentMode, .checklist)
+    /// Content never promotes a note to a list, whatever it happens to hold: a scratch note of
+    /// nothing but `- [ ]` lines is as much a markdown document as a page of prose.
+    func testNoContentTurnsAnUndeclaredNoteIntoAChecklist() throws {
+        for body in ["just prose\n", "- [ ] one\nsome prose\n", "", "# Groceries\n",
+                     "- [ ] one\n- [x] two\n"] {
+            let (vc, _) = try makeEditor(body: body, docType: nil)
+            XCTAssertNotEqual(vc.contentMode, .checklist, "body \(body.debugDescription) became a list")
+        }
+    }
 
-        let (mixed, _) = try makeEditor(body: "- [ ] one\nsome prose\n")
-        XCTAssertNotEqual(mixed.contentMode, .checklist)
-
-        let (empty, _) = try makeEditor(body: "")
-        XCTAssertNotEqual(empty.contentMode, .checklist)
-
-        let (headingOnly, _) = try makeEditor(body: "# Groceries\n")
-        XCTAssertNotEqual(headingOnly.contentMode, .checklist)
+    /// And a declared list stays one whatever it holds, including nothing.
+    func testADeclaredListIsAChecklistWhateverItHolds() throws {
+        for body in ["", "# Groceries\n", "- [ ] one\nsome prose\n"] {
+            let (vc, _) = try makeEditor(body: body)
+            XCTAssertEqual(vc.contentMode, .checklist, "body \(body.debugDescription) stopped being a list")
+        }
     }
 
     func testAVeryLongListFallsBackToRenderedMarkdown() throws {
@@ -126,7 +132,8 @@ final class ChecklistEditorTests: XCTestCase {
     /// The exact flow the popover's "+ List" button runs, through the real window controller.
     /// This is the reported bug: the new note opened as markdown with an unclickable checkbox.
     func testPlusListOpensAWindowShowingAClickableChecklist() throws {
-        let note = try XCTUnwrap(NoteWindowController.showNew(body: TaskList.newItemPrefix))
+        let note = try XCTUnwrap(NoteWindowController.showNew(body: TaskList.newItemPrefix,
+                                                              docType: .checklist))
         defer { NoteWindowController.closeAllForTesting() }
 
         let window = try XCTUnwrap(NSApp.windows.first { $0.noteEditor?.currentNote.url == note.url })
@@ -227,7 +234,8 @@ final class ChecklistEditorTests: XCTestCase {
         vc.toggleChecklistMarkdown(nil)
         XCTAssertTrue(vc.forceMarkdownForSession)
 
-        let other = try XCTUnwrap(NoteStore.shared.createNote(title: "Other", body: "- [ ] a\n", category: nil))
+        let other = try XCTUnwrap(NoteStore.shared.createNote(title: "Other", body: "- [ ] a\n",
+                                                              category: nil, docType: .checklist))
         vc.load(note: other)
 
         XCTAssertFalse(vc.forceMarkdownForSession)
@@ -247,8 +255,160 @@ final class ChecklistEditorTests: XCTestCase {
     }
 
     func testProseNoteDoesNotOfferTheChecklistCommand() throws {
-        let (vc, _) = try makeEditor(body: "just prose\n")
+        let (vc, _) = try makeEditor(body: "just prose\n", docType: .markdown)
         let item = NSMenuItem(title: "", action: Selector(("toggleChecklistMarkdown:")), keyEquivalent: "")
         XCTAssertFalse(vc.validateMenuItem(item))
+    }
+}
+
+/// Moving a list note between categories used to leave the window blank until it was reopened:
+/// `NoteStore.move` posts `.notesDidChange` before the editor has adopted the new URL, and the
+/// checklist resynced itself against a path that no longer existed.
+final class ChecklistCategoryMoveTests: XCTestCase {
+    private var tempRoot: URL!
+
+    override func setUpWithError() throws {
+        tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tq-move-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        NoteStore.shared.rootURL = tempRoot
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: tempRoot)
+        NoteStore.shared.rootURL = nil
+    }
+
+    private func makeEditor(body: String) throws -> (NoteEditorViewController, Note) {
+        let note = try XCTUnwrap(NoteStore.shared.createNote(title: "List", body: body,
+                                                             category: nil, docType: .checklist))
+        let vc = NoteEditorViewController(note: note, startInEditMode: false)
+        _ = vc.view
+        return (vc, note)
+    }
+
+    func testChangingCategoryKeepsTheChecklistOnScreen() throws {
+        let (vc, _) = try makeEditor(body: "- [ ] one\n- [x] two\n")
+        XCTAssertEqual(vc.contentMode, .checklist)
+
+        vc.performMove(to: "Work")
+
+        XCTAssertEqual(vc.contentMode, .checklist, "the list must survive a category change")
+        XCTAssertEqual(vc.checklist.rows.filter(\.isTask).count, 2)
+        XCTAssertEqual(vc.currentNote.category, "Work")
+        XCTAssertFalse(vc.checklist.view.isHidden)
+    }
+
+    func testChangingCategoryTwiceStillKeepsTheChecklist() throws {
+        let (vc, _) = try makeEditor(body: "- [ ] one\n")
+        vc.performMove(to: "Work")
+        vc.performMove(to: nil)
+
+        XCTAssertEqual(vc.contentMode, .checklist)
+        XCTAssertEqual(vc.checklist.rows.filter(\.isTask).count, 1)
+        XCTAssertNil(vc.currentNote.category)
+    }
+
+    /// The raw notification path on its own: the store posts while the editor's note still
+    /// names the old, now-missing file.
+    func testAChangeNotificationForAMissingFileDoesNotBlankTheList() throws {
+        let (vc, note) = try makeEditor(body: "- [ ] one\n")
+        _ = NoteStore.shared.move(note, to: "Work")
+
+        XCTAssertEqual(vc.contentMode, .checklist)
+        XCTAssertEqual(vc.checklist.rows.filter(\.isTask).count, 1)
+    }
+
+    /// The move carries the recorded document type with the file, so the note is still a list
+    /// in its new folder.
+    func testDocumentTypeFollowsTheNoteAcrossCategories() throws {
+        let (vc, _) = try makeEditor(body: "- [ ] one\n")
+        vc.performMove(to: "Work")
+        XCTAssertEqual(NoteMetadataStore.shared.docType(for: vc.currentNote.url), .checklist)
+    }
+}
+
+/// Covers the editor side of the recorded document type: a note opens as what it was declared
+/// to be, not as whatever its first line currently looks like.
+final class NoteDocumentTypeEditorTests: XCTestCase {
+    private var tempRoot: URL!
+    private var savedEditMode: NoteEditMode!
+
+    override func setUpWithError() throws {
+        tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tq-doctype-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        NoteStore.shared.rootURL = tempRoot
+        savedEditMode = PreferencesManager.shared.noteEditMode
+        PreferencesManager.shared.noteEditMode = .doubleClick
+    }
+
+    override func tearDownWithError() throws {
+        PreferencesManager.shared.noteEditMode = savedEditMode
+        try? FileManager.default.removeItem(at: tempRoot)
+        NoteStore.shared.rootURL = nil
+    }
+
+    private func editor(for note: Note) -> NoteEditorViewController {
+        let vc = NoteEditorViewController(note: note, startInEditMode: false)
+        _ = vc.view
+        return vc
+    }
+
+    /// The reported bug: a checkbox typed as the first line of an ordinary note silently made
+    /// it a checklist the next time it opened.
+    func testAMarkdownNoteFullOfCheckboxesStillOpensAsMarkdown() throws {
+        let note = try XCTUnwrap(NoteStore.shared.createNote(title: "Notes", body: "",
+                                                             category: nil, docType: .markdown))
+        XCTAssertTrue(NoteStore.shared.updateBody(of: note, body: "- [ ] milk\n"))
+        XCTAssertNotEqual(editor(for: note).contentMode, .checklist)
+    }
+
+    func testADeclaredListOpensAsAChecklistEvenWithProseInIt() throws {
+        let note = try XCTUnwrap(NoteStore.shared.createNote(title: "List", body: "- [ ] one\n",
+                                                             category: nil, docType: .checklist))
+        XCTAssertTrue(NoteStore.shared.updateBody(of: note, body: "- [ ] one\nsome prose\n"))
+        XCTAssertEqual(editor(for: note).contentMode, .checklist)
+    }
+
+    /// A note from before document types existed, or one dropped into the folder by hand, is a
+    /// markdown document even when every line is a checkbox. Its boxes are still clickable in
+    /// the rendered view, and one "Edit as Checklist" makes it a list for good.
+    func testANoteWithNoRecordedTypeOpensAsMarkdown() throws {
+        let note = try XCTUnwrap(NoteStore.shared.createNote(title: "Legacy", body: "- [ ] one\n",
+                                                             category: nil))
+        XCTAssertNotEqual(editor(for: note).contentMode, .checklist)
+    }
+
+    func testEditAsMarkdownRecordsTheChoicePermanently() throws {
+        let note = try XCTUnwrap(NoteStore.shared.createNote(title: "List", body: "- [ ] one\n",
+                                                             category: nil, docType: .checklist))
+        let vc = editor(for: note)
+        vc.toggleChecklistMarkdown(nil)
+
+        XCTAssertEqual(NoteMetadataStore.shared.docType(for: note.url), .markdown)
+        // A freshly opened window on the same note honours the recorded choice.
+        XCTAssertNotEqual(editor(for: note).contentMode, .checklist)
+    }
+
+    func testEditAsChecklistConvertsAMarkdownNoteBack() throws {
+        let note = try XCTUnwrap(NoteStore.shared.createNote(title: "Notes", body: "- [ ] one\n",
+                                                             category: nil, docType: .markdown))
+        let vc = editor(for: note)
+        XCTAssertNotEqual(vc.contentMode, .checklist)
+
+        vc.toggleChecklistMarkdown(nil)
+
+        XCTAssertEqual(vc.contentMode, .checklist)
+        XCTAssertEqual(NoteMetadataStore.shared.docType(for: note.url), .checklist)
+    }
+
+    /// A markdown note whose body would work as a list still offers the conversion.
+    func testConversionIsOfferedOnAMarkdownNoteOfTasks() throws {
+        let note = try XCTUnwrap(NoteStore.shared.createNote(title: "Notes", body: "- [ ] one\n",
+                                                             category: nil, docType: .markdown))
+        let item = NSMenuItem(title: "", action: Selector(("toggleChecklistMarkdown:")), keyEquivalent: "")
+        XCTAssertTrue(editor(for: note).validateMenuItem(item))
+        XCTAssertEqual(item.title, "Edit as Checklist")
     }
 }

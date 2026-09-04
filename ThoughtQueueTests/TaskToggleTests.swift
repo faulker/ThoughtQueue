@@ -155,12 +155,12 @@ final class TaskToggleTests: XCTestCase {
     func testClickingTheCheckboxGlyphHitsTheRightSourceLine() throws {
         let textView = makeRenderedTextView("- [ ] one\n- [ ] two")
 
-        // Character 0 is the first item's gutter; the second item starts after "  \u{2610} one\n".
+        // Character 0 is the first item's gutter; the second item starts after the first row.
         let first = try XCTUnwrap(textView.taskHit(at: try point(at: 0, in: textView)))
         XCTAssertEqual(first.sourceLine, 0)
         XCTAssertTrue(first.isCheckbox)
 
-        let secondGutter = ("  \u{2610} one\n" as NSString).length
+        let secondGutter = ("  " + MarkdownRenderer.checkboxPlaceholder + "one\n" as NSString).length
         let second = try XCTUnwrap(textView.taskHit(at: try point(at: secondGutter, in: textView)))
         XCTAssertEqual(second.sourceLine, 1)
         XCTAssertTrue(second.isCheckbox)
@@ -192,7 +192,7 @@ final class TaskToggleTests: XCTestCase {
         let markdown = "| A | B |\n| --- | --- |\n| 1 | 2 |\n\n- [ ] task"
         let textView = makeRenderedTextView(markdown)
 
-        let gutter = (textView.string as NSString).range(of: "\u{2610}").location - 2
+        let gutter = (textView.string as NSString).range(of: "\u{FFFC}").location - 2
         let hit = try XCTUnwrap(textView.taskHit(at: try point(at: gutter, in: textView)))
         XCTAssertEqual(hit.sourceLine, 4)
     }

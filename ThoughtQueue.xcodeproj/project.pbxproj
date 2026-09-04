@@ -14,6 +14,7 @@
 		23793BE184543FE6507D167D /* MarkdownRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B88640B5CD4D2E2A11EE4979 /* MarkdownRendererTests.swift */; };
 		23D25801986C49A9ADF44D32 /* PreferencesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B3AEE9D555745E4BBD03DAB /* PreferencesManager.swift */; };
 		311F0E9E89322C99A186B36C /* ChecklistRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A05974C799C7A6EAEE377E4 /* ChecklistRowView.swift */; };
+		32A2ED59659481A0935A4CF3 /* NoteMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BA1D1194263C95A089D013F /* NoteMetadata.swift */; };
 		3F202CF382553C98D774118F /* ChecklistRowsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0349630BE56F7AE1598770 /* ChecklistRowsTests.swift */; };
 		5061115D8FED3350D0C77278 /* ToastWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1D741EA098FEA403F3A713 /* ToastWindow.swift */; };
 		56DA9797DC951B6D0946C457 /* ChecklistViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3BA7BCB7F16DE095C4BA7E0 /* ChecklistViewController.swift */; };
@@ -49,11 +50,13 @@
 		D1F6A019C657C5CB208A2479 /* TaskListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F56BCE26B12EEEDDE613ED6F /* TaskListTests.swift */; };
 		DC6DDA37BE3D64EA09682D6F /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8147A07E5B7396382827499D /* Theme.swift */; };
 		DDA17C113C96444ECC170AF5 /* CaptureServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96450E0A3079E1CC546A7295 /* CaptureServiceTests.swift */; };
+		DE998EE724844897BC40D724 /* StatusItemMenuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAE848DB27CC3C7494C6308D /* StatusItemMenuTests.swift */; };
 		E0E008FCBCEB5B5B33EFB562 /* TaskList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD73C67F68915728831F769 /* TaskList.swift */; };
 		E107522DFE5E5DBF15EE843A /* NoteRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F563DDBE690F505C74116C0D /* NoteRowView.swift */; };
 		F2762077DB217E71E5E65688 /* FuzzySearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 434A8B44753B2B9E4EAD7759 /* FuzzySearch.swift */; };
 		F9D46F5224BA6C2CD039901A /* NoteRowDeleteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0FE0FB16D68AE68FB9F257D /* NoteRowDeleteTests.swift */; };
 		FDAFB808B57E0CCCFF28A3D0 /* AutoIntelServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D19EA2444190D4504688A141 /* AutoIntelServiceTests.swift */; };
+		FED61DD26F83A343BDDFB4F3 /* NoteMetadataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6424BACF22EB02E2E5490C9 /* NoteMetadataTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +77,7 @@
 		2A50C039EC60D91FBD30BC2E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3A7EA4608600D511EBDE3330 /* ChecklistEditorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistEditorTests.swift; sourceTree = "<group>"; };
 		3AA1FEEEBECAED63C7A00726 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
+		3BA1D1194263C95A089D013F /* NoteMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteMetadata.swift; sourceTree = "<group>"; };
 		3DD73C67F68915728831F769 /* TaskList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskList.swift; sourceTree = "<group>"; };
 		434A8B44753B2B9E4EAD7759 /* FuzzySearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzySearch.swift; sourceTree = "<group>"; };
 		48398CC33C0B881A2FBDBEF4 /* NoteWindowChromeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteWindowChromeTests.swift; sourceTree = "<group>"; };
@@ -108,12 +112,14 @@
 		BEC71685D27919559190BA8B /* TaskListRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListRows.swift; sourceTree = "<group>"; };
 		C3BA7BCB7F16DE095C4BA7E0 /* ChecklistViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistViewController.swift; sourceTree = "<group>"; };
 		C42D0B524E5A0030EE24FF49 /* UpdateServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateServiceTests.swift; sourceTree = "<group>"; };
+		C6424BACF22EB02E2E5490C9 /* NoteMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteMetadataTests.swift; sourceTree = "<group>"; };
 		CD3ED5F71DE593D4B1CC5DA3 /* CategoryManagerWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryManagerWindowController.swift; sourceTree = "<group>"; };
 		D19EA2444190D4504688A141 /* AutoIntelServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoIntelServiceTests.swift; sourceTree = "<group>"; };
 		E05F515D90AD6F46A3322E16 /* SettingsSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSync.swift; sourceTree = "<group>"; };
 		E0FE0FB16D68AE68FB9F257D /* NoteRowDeleteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteRowDeleteTests.swift; sourceTree = "<group>"; };
 		E49EC4A3F59C493F7A14ED60 /* ThoughtQueue.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ThoughtQueue.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E581470727BCC584E29154DF /* Note.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Note.swift; sourceTree = "<group>"; };
+		EAE848DB27CC3C7494C6308D /* StatusItemMenuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemMenuTests.swift; sourceTree = "<group>"; };
 		F3D4B4FE21C312B1B882832F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F563DDBE690F505C74116C0D /* NoteRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteRowView.swift; sourceTree = "<group>"; };
 		F56BCE26B12EEEDDE613ED6F /* TaskListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListTests.swift; sourceTree = "<group>"; };
@@ -152,6 +158,7 @@
 				94836FE437148129DAEB26AC /* FolderWatcher.swift */,
 				434A8B44753B2B9E4EAD7759 /* FuzzySearch.swift */,
 				E581470727BCC584E29154DF /* Note.swift */,
+				3BA1D1194263C95A089D013F /* NoteMetadata.swift */,
 				98338EB2FC611F4C84B0975B /* NoteStore.swift */,
 				3DD73C67F68915728831F769 /* TaskList.swift */,
 				BEC71685D27919559190BA8B /* TaskListRows.swift */,
@@ -197,6 +204,7 @@
 				5E0349630BE56F7AE1598770 /* ChecklistRowsTests.swift */,
 				70EE18318E6F916AF16ADBFD /* ChecklistSnapshotTests.swift */,
 				B88640B5CD4D2E2A11EE4979 /* MarkdownRendererTests.swift */,
+				C6424BACF22EB02E2E5490C9 /* NoteMetadataTests.swift */,
 				E0FE0FB16D68AE68FB9F257D /* NoteRowDeleteTests.swift */,
 				6C2BBABACAEBAC63087F8627 /* NoteStoreTests.swift */,
 				48398CC33C0B881A2FBDBEF4 /* NoteWindowChromeTests.swift */,
@@ -204,6 +212,7 @@
 				5C4ABA939FA382F6AAD18D83 /* PreferencesManagerTests.swift */,
 				0127701C5E8C5172D874DB12 /* SearchAndNamingTests.swift */,
 				01EA72EA59E1566CFC3EF594 /* SettingsSyncTests.swift */,
+				EAE848DB27CC3C7494C6308D /* StatusItemMenuTests.swift */,
 				F56BCE26B12EEEDDE613ED6F /* TaskListTests.swift */,
 				4BA91E1F8AD5E8CBCB257E04 /* TaskToggleTests.swift */,
 				96CBBBE98C0F41A86E34B5F6 /* UIFontPreferenceTests.swift */,
@@ -332,6 +341,7 @@
 				9A2C154B724623EEDA2EB6CF /* HotkeyManager.swift in Sources */,
 				CE31692FCD718B50313E7292 /* MarkdownRenderer.swift in Sources */,
 				B31846DF4826EDB26B1A5133 /* Note.swift in Sources */,
+				32A2ED59659481A0935A4CF3 /* NoteMetadata.swift in Sources */,
 				69AD78D9A1CD40444A12F222 /* NoteNavigatorViewController.swift in Sources */,
 				E107522DFE5E5DBF15EE843A /* NoteRowView.swift in Sources */,
 				BE7AE6388A3748922B5B2C6F /* NoteStore.swift in Sources */,
@@ -362,6 +372,7 @@
 				3F202CF382553C98D774118F /* ChecklistRowsTests.swift in Sources */,
 				7AF4D17E472FAFA819B80A6B /* ChecklistSnapshotTests.swift in Sources */,
 				23793BE184543FE6507D167D /* MarkdownRendererTests.swift in Sources */,
+				FED61DD26F83A343BDDFB4F3 /* NoteMetadataTests.swift in Sources */,
 				F9D46F5224BA6C2CD039901A /* NoteRowDeleteTests.swift in Sources */,
 				992471F77F1B4A1C3C0DC162 /* NoteStoreTests.swift in Sources */,
 				C27FC989912D4B83A8A9F5E1 /* NoteWindowChromeTests.swift in Sources */,
@@ -369,6 +380,7 @@
 				227CC50DEBC5583B89FC0A65 /* PreferencesManagerTests.swift in Sources */,
 				B285710C8892ABAF9B8D319B /* SearchAndNamingTests.swift in Sources */,
 				00EA001519CA94EDFAFA5DBE /* SettingsSyncTests.swift in Sources */,
+				DE998EE724844897BC40D724 /* StatusItemMenuTests.swift in Sources */,
 				D1F6A019C657C5CB208A2479 /* TaskListTests.swift in Sources */,
 				953592C3098E8486510A455A /* TaskToggleTests.swift in Sources */,
 				5B45DA1A806D3B0BCC7D8412 /* UIFontPreferenceTests.swift in Sources */,

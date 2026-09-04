@@ -208,7 +208,7 @@ final class PopoverViewController: NSViewController {
     /// Start a checkbox list: an ordinary note pre-filled with one empty task item.
     @objc private func addChecklist() {
         onRequestClose?()
-        NoteWindowController.showNew(body: TaskList.newItemPrefix)
+        NoteWindowController.showNew(body: TaskList.newItemPrefix, docType: .checklist)
     }
 }
 

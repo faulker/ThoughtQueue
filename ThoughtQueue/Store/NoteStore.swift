@@ -17,6 +17,7 @@ final class NoteStore {
     /// The store root folder. Set via PreferencesManager; can be overridden in tests.
     var rootURL: URL? {
         didSet {
+            NoteMetadataStore.shared.invalidateCache()
             if let url = rootURL { ensureRootExists(url) }
         }
     }
@@ -248,8 +249,12 @@ final class NoteStore {
 
     /// Create a new note. `title` becomes the filename (slugified); empty falls back to
     /// the first body line, then a timestamp. Returns the created Note or nil on failure.
+    ///
+    /// `docType` records what kind of document this is, so a note created as prose stays prose
+    /// even after the user types a checkbox into it. Pass nil (the default) to leave the type
+    /// unrecorded, which falls back to inferring it from the content.
     @discardableResult
-    func createNote(title: String, body: String, category: String?) -> Note? {
+    func createNote(title: String, body: String, category: String?, docType: NoteDocType? = nil) -> Note? {
         guard let folder = folderURL(for: category), let root = rootURL else { return nil }
 
         var stem = Self.slug(title)
@@ -263,9 +268,24 @@ final class NoteStore {
             log.error("createNote write failed: \(error.localizedDescription)")
             return nil
         }
+        if let docType { NoteMetadataStore.shared.setDocType(docType, for: url) }
         let note = Note.from(url: url, storeRoot: root)
         postChange()
         return note
+    }
+
+    // MARK: - Document type
+
+    /// How `note` should be presented. Its recorded type, or `.markdown` when nothing was
+    /// recorded: a note is a checkbox list because it was declared one, never because of what
+    /// its lines currently look like.
+    func docType(of note: Note) -> NoteDocType {
+        NoteMetadataStore.resolve(explicit: NoteMetadataStore.shared.docType(for: note.url))
+    }
+
+    /// Record `note`'s document type, so the choice survives edits and restarts.
+    func setDocType(_ type: NoteDocType?, of note: Note) {
+        NoteMetadataStore.shared.setDocType(type, for: note.url)
     }
 
     /// Title used when cloning a note: parent title with "copy" prefixed.
@@ -281,7 +301,9 @@ final class NoteStore {
             log.warning("clone source missing: \(note.url.path)")
             return nil
         }
-        return createNote(title: Self.cloneTitle(for: note), body: body(of: note), category: note.category)
+        return createNote(title: Self.cloneTitle(for: note), body: body(of: note),
+                          category: note.category,
+                          docType: NoteMetadataStore.shared.docType(for: note.url))
     }
 
     /// Append text to an existing note, separated by a blank line. Returns true on success.
@@ -347,6 +369,7 @@ final class NoteStore {
             log.error("rename failed: \(error.localizedDescription)")
             return nil
         }
+        NoteMetadataStore.shared.move(from: note.url, to: dest)
         let renamed = Note.from(url: dest, storeRoot: root)
         postChange()
         return renamed
@@ -371,6 +394,7 @@ final class NoteStore {
             log.error("move failed: \(error.localizedDescription)")
             return nil
         }
+        NoteMetadataStore.shared.move(from: note.url, to: dest)
         let moved = Note.from(url: dest, storeRoot: root)
         postChange()
         return moved
@@ -386,6 +410,7 @@ final class NoteStore {
             log.error("delete failed: \(error.localizedDescription)")
             return false
         }
+        NoteMetadataStore.shared.forget(note.url)
         postChange()
         return true
     }
@@ -430,6 +455,7 @@ final class NoteStore {
             log.error("renameCategory failed: \(error.localizedDescription)")
             return false
         }
+        NoteMetadataStore.shared.moveFolder(from: oldFolder, to: newFolder)
         remapWorkingDocumentIfUnder(oldFolder: oldFolder, newFolder: newFolder)
         postChange()
         return true
@@ -455,6 +481,7 @@ final class NoteStore {
             registerSelfWrite(dest)
             do {
                 try fm.moveItem(at: note.url, to: dest)
+                NoteMetadataStore.shared.move(from: note.url, to: dest)
                 remapWorkingDocument(from: note.url, to: dest)
             } catch {
                 log.error("deleteCategory move failed: \(error.localizedDescription)")
@@ -471,6 +498,7 @@ final class NoteStore {
             postChange()
             return false
         }
+        NoteMetadataStore.shared.forgetFolder(folder)
         postChange()
         return true
     }

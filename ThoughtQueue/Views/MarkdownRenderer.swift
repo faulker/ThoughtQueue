@@ -9,6 +9,37 @@ extension NSAttributedString.Key {
     static let tqTaskCheckbox = NSAttributedString.Key("tqTaskCheckbox")
 }
 
+/// Draws the same box `ThemedCheckbox` draws, inline in rendered markdown.
+///
+/// An attachment *cell* rather than a baked NSImage: it draws inside the text view's own
+/// drawing context, so `Theme`'s light/dark color pairs resolve against the current appearance
+/// on every redraw instead of being frozen at render time.
+final class CheckboxAttachmentCell: NSTextAttachmentCell {
+    let checked: Bool
+    private let side: CGFloat
+    /// How far below the baseline the box hangs, so it centres on the text's cap height.
+    private let descent: CGFloat
+
+    init(checked: Bool, font: NSFont) {
+        self.checked = checked
+        let side = CheckboxGlyph.side(forPointSize: font.pointSize)
+        self.side = side
+        self.descent = max((side - font.capHeight) / 2, 0)
+        super.init()
+    }
+
+    required init(coder: NSCoder) { fatalError() }
+
+    override func cellSize() -> NSSize { NSSize(width: side + 2, height: side) }
+
+    override func cellBaselineOffset() -> NSPoint { NSPoint(x: 0, y: -descent) }
+
+    override func draw(withFrame cellFrame: NSRect, in controlView: NSView?) {
+        CheckboxGlyph.draw(in: cellFrame, side: side, checked: checked,
+                           hovering: false, flipped: controlView?.isFlipped ?? false)
+    }
+}
+
 /// Renders block-level markdown to an NSAttributedString for read-only display.
 /// Apple's `NSAttributedString(markdown:)` flattens block structure (headings/lists become
 /// plain text). This renderer handles the blocks ThoughtQueue actually uses: headings,
@@ -49,18 +80,32 @@ enum MarkdownRenderer {
         return result
     }
 
+    /// The character a checkbox occupies in the rendered string: an attachment, not a box
+    /// glyph, so the drawn box matches the checklist editor's exactly. Two UTF-16 units wide
+    /// with its trailing space, the same as the `\u{2610} ` it replaced, so gutter offsets
+    /// stamped by callers are unchanged.
+    static let checkboxPlaceholder = "\u{FFFC} "
+
+    /// A themed checkbox plus its trailing space, as an attributed run.
+    static func checkbox(checked: Bool, baseFont: NSFont) -> NSAttributedString {
+        let attachment = NSTextAttachment()
+        attachment.attachmentCell = CheckboxAttachmentCell(checked: checked, font: baseFont)
+        let run = NSMutableAttributedString(attachment: attachment)
+        run.append(NSAttributedString(string: " "))
+        run.addAttributes([.font: baseFont, .foregroundColor: NSColor.labelColor],
+                          range: NSRange(location: 0, length: run.length))
+        return run
+    }
+
     /// Render a single line as a block element.
     private static func renderLine(_ line: String, baseFont: NSFont, sourceLine: Int) -> NSAttributedString {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
 
         // Task checkboxes: - [ ] / - [x]  (rendered with a visible box glyph).
         if let task = parseTask(trimmed) {
-            let box = task.checked ? "\u{2611} " : "\u{2610} "   // ☑ / ☐
+            let box = checkbox(checked: task.checked, baseFont: baseFont)
             let body = inline(task.text, baseFont: baseFont)
-            let combined = NSMutableAttributedString(string: box, attributes: [
-                .font: baseFont,
-                .foregroundColor: NSColor.labelColor,
-            ])
+            let combined = NSMutableAttributedString(attributedString: box)
             if task.checked {
                 body.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue,
                                   range: NSRange(location: 0, length: body.length))
@@ -72,7 +117,7 @@ enum MarkdownRenderer {
             // Stamp the source line over the whole item (so a checklist can make the entire row
             // a target) and mark the gutter plus box separately (the always-clickable part).
             let wrapped = NSMutableAttributedString(attributedString: prefixed("  ", combined, baseFont: baseFont))
-            let gutterLength = ("  " as NSString).length + (box as NSString).length
+            let gutterLength = ("  " as NSString).length + box.length
             wrapped.addAttribute(.tqTaskSourceLine, value: sourceLine,
                                  range: NSRange(location: 0, length: wrapped.length))
             wrapped.addAttribute(.tqTaskCheckbox, value: true,

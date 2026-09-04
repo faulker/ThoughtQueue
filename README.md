@@ -174,7 +174,7 @@ Select text in any app, hit the shortcut, and keep working. A toast confirms the
 
 - **Left-click** the menu bar icon to open a popover with a searchable notes list and quick actions on each row (Open with, Clone note, Copy note, Copy path, Delete)
 - **Double-click** the menu bar icon to open your working document. Set one first by right-clicking a note in the note window's navigation panel and picking **Set as Working Document**
-- **Right-click** the menu bar icon for Categories, Preferences, or Quit
+- **Right-click** the menu bar icon for Categories, **Open Notes Folder** (reveals the store folder in Finder), Preferences, or Quit
 
 ### Delete a note
 
@@ -214,12 +214,17 @@ greppable, syncs like any other file, and renders as a checklist on GitHub. Edit
 rewrites that line; everything else in the file is left byte for byte alone, including indentation,
 `*` or `+` bullets, and Windows line endings.
 
-If you need the raw markdown for a note (to paste in a long list, or because a note was treated as
-a list when you did not mean it to be), use **View > Edit as Markdown** (Shift+Cmd+M). It applies
-to that note for as long as its window is open.
+Whether a note is a list is a property of the note, never a guess about its contents. `+ List`
+makes a list; `+ Add` makes a markdown document. Typing `- [ ] milk` into an ordinary note does not
+turn it into a list behind your back, and deleting the last checkbox out of a list does not stop it
+being one. To change a note's kind, use **View > Edit as Markdown** / **Edit as Checklist**
+(Shift+Cmd+M); the choice sticks.
 
-A note that mixes prose with a few `- [ ]` lines is not a list. It stays an ordinary markdown note
-with the usual view/edit toggle, and its checkboxes are clickable in the rendered view.
+That rule applies to notes made before document types existed, and to files you drop into the
+folder by hand: with no recorded kind they are markdown documents. If you have an older note you
+want as a real checkbox list, open it and press Shift+Cmd+M once. Until you do, its checkboxes are
+still drawn as proper boxes in the rendered view and still tick when you click them, so nothing is
+lost either way.
 
 ### Organize with categories
 
@@ -235,7 +240,13 @@ Right-click the menu bar icon > **Preferences**. Click a shortcut field and pres
 
 ### Sync settings across devices
 
-Settings sync is on by default. ThoughtQueue mirrors your syncable preferences into a hidden `.thoughtqueue/settings.plist` file inside the store folder, so if that folder lives in iCloud, Dropbox, or similar, your other Macs pointed at the same folder pick up the changes (last write wins). Device-local values (the store folder location itself and the working-document path) are never synced. Toggle it off under **Preferences > Sync settings via store folder** to keep settings on this Mac only.
+ThoughtQueue keeps two small files in a hidden `.thoughtqueue` folder inside the store folder:
+`metadata.json` (per-note facts that cannot be read off the file, currently just whether a note is
+a checkbox list) and `settings.plist` (see below). Your notes themselves stay plain, untouched
+markdown. Delete `metadata.json` and nothing is lost: every note simply falls back to being
+classified by its contents.
+
+Settings sync is on by default. ThoughtQueue mirrors your syncable preferences into that hidden `.thoughtqueue/settings.plist` file inside the store folder, so if that folder lives in iCloud, Dropbox, or similar, your other Macs pointed at the same folder pick up the changes (last write wins). Device-local values (the store folder location itself and the working-document path) are never synced. Toggle it off under **Preferences > Sync settings via store folder** to keep settings on this Mac only.
 
 ### Keep the app up to date
 
