@@ -7,16 +7,20 @@ import Cocoa
 final class NoteNavigatorNode {
     let category: String?
     let note: Note?
+    /// True when this is a group header for an archived folder. Notes never set this.
+    let isArchived: Bool
     var children: [NoteNavigatorNode] = []
 
-    init(category: String) {
+    init(category: String, archived: Bool = false) {
         self.category = category
         self.note = nil
+        self.isArchived = archived
     }
 
     init(note: Note) {
         self.note = note
         self.category = nil
+        self.isArchived = false
     }
 
     var isGroup: Bool { note == nil }
@@ -114,6 +118,12 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
     /// Rows currently in the outline (groups plus their expanded notes). Read by tests.
     var rowCount: Int { outlineView.numberOfRows }
 
+    /// Group titles currently in the tree, top to bottom. Read by tests.
+    var groupNames: [String] { groups.compactMap(\.category) }
+
+    /// Titles of groups that carry the archived flag. Read by tests.
+    var archivedGroupNames: [String] { groups.compactMap { $0.isArchived ? $0.category : nil } }
+
     /// Rebuild from the store, debounced so a burst of saves costs one tree walk.
     @objc private func onNotesChanged() {
         let schedule = { [weak self] in
@@ -136,21 +146,19 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
         selectHighlightedRow()
     }
 
-    /// Group every note by category (Uncategorized last), dropping empty groups and applying
-    /// the current search query. Notes keep the store's newest-modified-first order unless a
-    /// query is active, in which case fuzzy relevance wins.
+    /// Group every note by category (active folders, Uncategorized, then archived), dropping
+    /// empty groups and applying the current search query. Notes keep the store's
+    /// newest-modified-first order unless a query is active, in which case fuzzy relevance wins.
     private func buildGroups() -> [NoteNavigatorNode] {
         let store = NoteStore.shared
-        var names: [String?] = store.categories()
-        names.append(nil) // Uncategorized sorts last
-
-        return names.compactMap { category in
+        return store.navigatorCategories().compactMap { category in
             var notes = store.notes(in: category)
             if !query.isEmpty {
                 notes = FuzzySearch.rank(notes: notes, query: query)
             }
             guard !notes.isEmpty else { return nil }
-            let group = NoteNavigatorNode(category: category ?? Note.uncategorized)
+            let archived = store.isArchived(category: category)
+            let group = NoteNavigatorNode(category: category ?? Note.uncategorized, archived: archived)
             group.children = notes.map { NoteNavigatorNode(note: $0) }
             return group
         }
@@ -258,18 +266,31 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? NoteNavigatorNode else { return nil }
         if let note = node.note { return noteRow(for: note) }
-        return groupRow(named: node.category ?? "")
+        return groupRow(named: node.category ?? "", archived: node.isArchived)
     }
 
     /// A category header row: small caps label in the design's sage accent.
-    private func groupRow(named name: String) -> NSView {
+    /// Archived folders use a quieter color plus an archive-box glyph so they read as stored away.
+    private func groupRow(named name: String, archived: Bool) -> NSView {
         let label = NSTextField(labelWithString: name.uppercased())
         label.font = Theme.body(10.5, weight: .semibold)
-        label.textColor = Theme.accentBorder
+        label.textColor = archived ? Theme.textSecondary : Theme.accentBorder
         label.lineBreakMode = .byTruncatingTail
 
-        let stack = NSStackView(views: [label])
+        var views: [NSView] = [label]
+        if archived {
+            let icon = NSImageView()
+            icon.image = NSImage(systemSymbolName: "archivebox", accessibilityDescription: "Archived")
+            icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 9, weight: .semibold)
+            icon.contentTintColor = Theme.textSecondary
+            icon.toolTip = "Archived"
+            icon.setContentHuggingPriority(.required, for: .horizontal)
+            views.append(icon)
+        }
+
+        let stack = NSStackView(views: views)
         stack.orientation = .horizontal
+        stack.spacing = 5
         stack.edgeInsets = NSEdgeInsets(top: 0, left: 4, bottom: 0, right: 6)
         return stack
     }

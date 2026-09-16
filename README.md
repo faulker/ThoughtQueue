@@ -20,7 +20,7 @@ You're reading something, debugging code, or thinking out loud and want to jot i
 - **Copy, don't just open** -- one click to copy a note's full body or its file path straight to the clipboard, right from its row
 - **Clone note** -- duplicate a note from the popover row; the copy keeps the same body and category, titled `copy <original>`
 - **Run notes anywhere** -- configurable "Open With" destinations: run a shell command against the note's file (open it in an editor, hand it to a CLI tool, whatever `{path}` template you want), or paste it into an app like Claude Desktop. Comes with Claude and Zed presets; add, edit, or remove your own in Preferences
-- **Categories** -- organize notes however you want; create, rename, move between, or delete categories, with folders on disk to match. New categories can also be created inline from any category dropdown
+- **Categories** -- organize notes however you want; create, rename, move between, archive, or delete categories, with folders on disk to match. Archived folders stay on disk but their notes drop out of the menu bar list. New categories can also be created inline from any category dropdown
 - **Working document** -- optionally designate one note as the default sink so quick captures append to it instead of creating a new file each time
 - **On-device auto-title & auto-category** -- optional, macOS 26+: suggests a title and category for each capture via Apple's on-device model, with a review toast to accept, tweak, or dismiss
 - **Local, plain-text storage** -- notes are `.md` files in a folder you choose; no database, so they're greppable and easy to sync or back up yourself
@@ -228,7 +228,7 @@ lost either way.
 
 ### Organize with categories
 
-Open **Categories…** from the menu bar icon's right-click menu to add, rename, or delete category folders (deleting moves notes to Uncategorized). To move a note into a different category, use the category dropdown in the note window; it also offers **New Category** to create and move in one step.
+Open **Categories…** from the menu bar icon's right-click menu to add, rename, archive, or delete category folders (deleting moves notes to Uncategorized). Archive hides that folder's notes from the menu bar popover; they stay on disk and still show in the note window's navigation panel (at the bottom, marked archived) and in the category picker. To move a note into a different category, use the category dropdown in the note window; it also offers **New Category** to create and move in one step.
 
 ### Change the interface font
 
@@ -241,10 +241,10 @@ Right-click the menu bar icon > **Preferences**. Click a shortcut field and pres
 ### Sync settings across devices
 
 ThoughtQueue keeps two small files in a hidden `.thoughtqueue` folder inside the store folder:
-`metadata.json` (per-note facts that cannot be read off the file, currently just whether a note is
-a checkbox list) and `settings.plist` (see below). Your notes themselves stay plain, untouched
-markdown. Delete `metadata.json` and nothing is lost: every note simply falls back to being
-classified by its contents.
+`metadata.json` (facts that cannot be read off the files: whether a note is a checkbox list, and
+whether a category folder is archived) and `settings.plist` (see below). Your notes themselves stay
+plain, untouched markdown. Delete `metadata.json` and nothing is lost: every note simply falls back
+to being classified by its contents, and every folder shows in the popover again.
 
 Settings sync is on by default. ThoughtQueue mirrors your syncable preferences into that hidden `.thoughtqueue/settings.plist` file inside the store folder, so if that folder lives in iCloud, Dropbox, or similar, your other Macs pointed at the same folder pick up the changes (last write wins). Device-local values (the store folder location itself and the working-document path) are never synced. Toggle it off under **Preferences > Sync settings via store folder** to keep settings on this Mac only.
 

@@ -29,6 +29,19 @@ final class NoteWindowChromeTests: XCTestCase {
         XCTAssertGreaterThan(navigator.rowCount, 0)
     }
 
+    func testNavigatorPutsArchivedGroupsAtTheBottomWithAFlag() throws {
+        _ = try XCTUnwrap(NoteStore.shared.createNote(title: "Live", body: "x", category: "Work"))
+        _ = try XCTUnwrap(NoteStore.shared.createNote(title: "Old", body: "x", category: "Done"))
+        _ = try XCTUnwrap(NoteStore.shared.createNote(title: "Loose", body: "x", category: nil))
+        XCTAssertTrue(NoteStore.shared.setArchived(true, category: "Done"))
+
+        let navigator = NoteNavigatorViewController()
+        _ = navigator.view
+
+        XCTAssertEqual(navigator.groupNames, ["Work", Note.uncategorized, "Done"])
+        XCTAssertEqual(navigator.archivedGroupNames, ["Done"])
+    }
+
     func testNavigatorReloadStillPicksUpLaterNotes() throws {
         let navigator = NoteNavigatorViewController()
         _ = navigator.view

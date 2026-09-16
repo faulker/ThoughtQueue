@@ -11,18 +11,19 @@ enum NoteDocType: String, Codable {
     case checklist
 }
 
-/// Explicit per-note metadata for the store folder.
+/// Explicit per-note and per-folder metadata for the store folder.
 ///
 /// Notes stay plain markdown files: nothing here touches a note's bytes. This is one sidecar,
 /// `.thoughtqueue/metadata.json`, in the same hidden folder as the settings mirror, recording
-/// facts about a note that cannot be read off its content. Today that is one fact: whether the
-/// note is a checkbox list or a markdown document.
+/// facts that cannot be read off content. Today that is two facts: a note's `NoteDocType`, and
+/// whether a category folder is archived (its notes stay on disk but drop out of the popover).
 ///
 /// Content is never consulted. A note with no recorded type is a markdown document, full stop:
 /// two notes that both read as nothing but `- [ ]` lines can be one person's checklist and
 /// another's scratch pad, and no rule over the bytes can tell them apart. Only "+ List" and an
 /// explicit "Edit as Checklist" make a list, so typing a checkbox into a note can never convert
-/// it, and neither can deleting the last one convert it back.
+/// it, and neither can deleting the last one convert it back. A folder is archived only when
+/// the user flags it; a folder named "Archive" is just a name until that happens.
 ///
 /// Keys are store-relative paths, so the file survives moving the whole store folder. The app's
 /// own renames and moves remap keys; an external move loses the entry and falls back to
@@ -36,13 +37,49 @@ final class NoteMetadataStore {
         var type: NoteDocType?
     }
 
+    /// One category folder's recorded facts. Same "empty means omit" rule as `Entry`.
+    struct FolderEntry: Codable, Equatable {
+        /// When true, notes in this folder are hidden from the menu-bar popover.
+        var archived: Bool?
+    }
+
     /// The on-disk shape of `.thoughtqueue/metadata.json`.
+    ///
+    /// `folders` is optional on disk so files written before folder flags existed still decode.
+    /// An absent or empty map is the same as every folder being visible.
     struct File: Codable, Equatable {
         var version: Int
         var notes: [String: Entry]
+        var folders: [String: FolderEntry]
 
         static let currentVersion = 1
-        static let empty = File(version: currentVersion, notes: [:])
+        static let empty = File(version: currentVersion, notes: [:], folders: [:])
+
+        enum CodingKeys: String, CodingKey {
+            case version, notes, folders
+        }
+
+        init(version: Int, notes: [String: Entry], folders: [String: FolderEntry] = [:]) {
+            self.version = version
+            self.notes = notes
+            self.folders = folders
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            version = try c.decode(Int.self, forKey: .version)
+            notes = try c.decodeIfPresent([String: Entry].self, forKey: .notes) ?? [:]
+            folders = try c.decodeIfPresent([String: FolderEntry].self, forKey: .folders) ?? [:]
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(version, forKey: .version)
+            try c.encode(notes, forKey: .notes)
+            if !folders.isEmpty {
+                try c.encode(folders, forKey: .folders)
+            }
+        }
     }
 
     static let folderName = ".thoughtqueue"
@@ -111,6 +148,14 @@ final class NoteMetadataStore {
         return load_locked().notes[key]?.type
     }
 
+    /// Whether `folder` is flagged archived. Unknown or unrecorded folders are visible.
+    func isArchived(folder: URL) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let root, let key = Self.key(for: folder, root: root) else { return false }
+        return load_locked().folders[key]?.archived == true
+    }
+
     // MARK: - Writes
 
     /// Record (or, with nil, clear) the type for a note URL.
@@ -124,6 +169,23 @@ final class NoteMetadataStore {
                 file.notes.removeValue(forKey: key)
             } else {
                 file.notes[key] = entry
+            }
+            return true
+        }
+    }
+
+    /// Flag (or, with false, clear) a category folder as archived.
+    func setArchived(_ archived: Bool, folder: URL) {
+        mutate { root, file in
+            guard let key = Self.key(for: folder, root: root) else { return false }
+            var entry = file.folders[key] ?? FolderEntry()
+            let value: Bool? = archived ? true : nil
+            guard entry.archived != value else { return false }
+            entry.archived = value
+            if entry == FolderEntry() {
+                file.folders.removeValue(forKey: key)
+            } else {
+                file.folders[key] = entry
             }
             return true
         }
@@ -150,6 +212,7 @@ final class NoteMetadataStore {
     }
 
     /// Re-key every entry under `oldFolder` to sit under `newFolder`, for a category rename.
+    /// Also remaps the folder's own archive flag so a rename cannot un-archive it.
     func moveFolder(from oldFolder: URL, to newFolder: URL) {
         mutate { root, file in
             guard let oldPrefix = Self.key(for: oldFolder, root: root),
@@ -161,18 +224,29 @@ final class NoteMetadataStore {
                 file.notes[newPrefix + String(key.dropFirst(oldPrefix.count))] = entry
                 changed = true
             }
+            if let folderEntry = file.folders.removeValue(forKey: oldPrefix) {
+                file.folders[newPrefix] = folderEntry
+                changed = true
+            }
             return changed
         }
     }
 
     /// Forget everything under a folder, for a category delete whose notes did not survive.
+    /// Also drops the folder's own archive flag so an empty archived folder leaves no ghost.
     func forgetFolder(_ folder: URL) {
         mutate { root, file in
             guard let prefix = Self.key(for: folder, root: root) else { return false }
             let doomed = file.notes.keys.filter { $0.hasPrefix(prefix + "/") }
-            guard !doomed.isEmpty else { return false }
-            for key in doomed { file.notes.removeValue(forKey: key) }
-            return true
+            var changed = false
+            for key in doomed {
+                file.notes.removeValue(forKey: key)
+                changed = true
+            }
+            if file.folders.removeValue(forKey: prefix) != nil {
+                changed = true
+            }
+            return changed
         }
     }
 

@@ -151,4 +151,88 @@ final class NoteMetadataTests: XCTestCase {
         let relocated = tempRoot.appendingPathComponent(note.url.lastPathComponent)
         XCTAssertEqual(NoteMetadataStore.shared.docType(for: relocated), .checklist)
     }
+
+    // MARK: - Archived folders
+
+    /// A folder named Archive is still a normal category until the user flags it.
+    func testAFolderNamedArchiveIsVisibleUntilFlagged() throws {
+        _ = try XCTUnwrap(NoteStore.shared.createNote(title: "A", body: "x", category: "Archive"))
+        XCTAssertFalse(NoteStore.shared.isArchived(category: "Archive"))
+        XCTAssertEqual(NoteStore.shared.visibleNotes().count, 1)
+    }
+
+    func testArchivedFolderNotesStayOnDiskButLeaveVisibleNotes() throws {
+        let keep = try XCTUnwrap(NoteStore.shared.createNote(title: "Keep", body: "x", category: "Work"))
+        let hidden = try XCTUnwrap(NoteStore.shared.createNote(title: "Old", body: "x", category: "Done"))
+        XCTAssertTrue(NoteStore.shared.setArchived(true, category: "Done"))
+        XCTAssertTrue(NoteStore.shared.isArchived(category: "Done"))
+        XCTAssertFalse(NoteStore.shared.isArchived(category: "Work"))
+
+        let visibleTitles = Set(NoteStore.shared.visibleNotes().map(\.title))
+        XCTAssertEqual(visibleTitles, [keep.title])
+        XCTAssertEqual(NoteStore.shared.allNotes().count, 2)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: hidden.url.path))
+    }
+
+    func testClearingTheArchiveFlagBringsNotesBack() throws {
+        _ = try XCTUnwrap(NoteStore.shared.createNote(title: "A", body: "x", category: "Done"))
+        XCTAssertTrue(NoteStore.shared.setArchived(true, category: "Done"))
+        XCTAssertTrue(NoteStore.shared.visibleNotes().isEmpty)
+        XCTAssertTrue(NoteStore.shared.setArchived(false, category: "Done"))
+        XCTAssertEqual(NoteStore.shared.visibleNotes().count, 1)
+    }
+
+    func testUncategorizedCannotBeArchived() {
+        XCTAssertFalse(NoteStore.shared.setArchived(true, category: Note.uncategorized))
+        XCTAssertFalse(NoteStore.shared.isArchived(category: nil))
+    }
+
+    func testRenamingAnArchivedCategoryKeepsTheFlag() throws {
+        _ = try XCTUnwrap(NoteStore.shared.createNote(title: "A", body: "x", category: "Old"))
+        XCTAssertTrue(NoteStore.shared.setArchived(true, category: "Old"))
+        XCTAssertTrue(NoteStore.shared.renameCategory("Old", to: "New"))
+        XCTAssertTrue(NoteStore.shared.isArchived(category: "New"))
+        XCTAssertFalse(NoteStore.shared.isArchived(category: "Old"))
+        XCTAssertTrue(NoteStore.shared.visibleNotes().isEmpty)
+    }
+
+    func testDeletingAnArchivedCategoryDropsTheFlagAndShowsRelocatedNotes() throws {
+        _ = try XCTUnwrap(NoteStore.shared.createNote(title: "A", body: "x", category: "Temp"))
+        XCTAssertTrue(NoteStore.shared.setArchived(true, category: "Temp"))
+        XCTAssertTrue(NoteStore.shared.deleteCategory("Temp"))
+        XCTAssertFalse(NoteStore.shared.isArchived(category: "Temp"))
+        XCTAssertEqual(NoteStore.shared.visibleNotes().count, 1)
+    }
+
+    /// An empty archived folder must not leave a ghost flag that re-applies if the name is reused.
+    func testDeletingAnEmptyArchivedFolderForgetsTheFlag() {
+        XCTAssertTrue(NoteStore.shared.createCategory("Done"))
+        XCTAssertTrue(NoteStore.shared.setArchived(true, category: "Done"))
+        XCTAssertTrue(NoteStore.shared.deleteCategory("Done"))
+        XCTAssertTrue(NoteStore.shared.createCategory("Done"))
+        XCTAssertFalse(NoteStore.shared.isArchived(category: "Done"))
+    }
+
+    /// Files written before folder flags existed must still load note types.
+    func testOldSidecarWithoutFoldersStillLoadsNoteTypes() throws {
+        let note = try XCTUnwrap(NoteStore.shared.createNote(title: "A", body: "x", category: nil,
+                                                             docType: .checklist))
+        let sidecar = tempRoot
+            .appendingPathComponent(NoteMetadataStore.folderName, isDirectory: true)
+            .appendingPathComponent(NoteMetadataStore.fileName)
+        let legacy = """
+        {
+          "notes" : {
+            "a.md" : {
+              "type" : "checklist"
+            }
+          },
+          "version" : 1
+        }
+        """
+        try legacy.write(to: sidecar, atomically: true, encoding: .utf8)
+        NoteMetadataStore.shared.invalidateCache()
+        XCTAssertEqual(NoteMetadataStore.shared.docType(for: note.url), .checklist)
+        XCTAssertFalse(NoteStore.shared.isArchived(category: "Done"))
+    }
 }

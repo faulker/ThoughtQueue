@@ -166,7 +166,8 @@ final class PopoverViewController: NSViewController {
 
     func reload() {
         _ = view
-        allNotes = NoteStore.shared.allNotes()
+        // Archived folders stay on disk and in the navigator; they just leave this dropdown.
+        allNotes = NoteStore.shared.visibleNotes()
         applyFilter()
     }
 

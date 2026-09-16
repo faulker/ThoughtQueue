@@ -108,6 +108,15 @@ final class NoteStore {
 
     // MARK: - Reads
 
+    /// Category names for the note-window sidebar: active folders, Uncategorized, then archived.
+    /// Uncategorized is `nil` so callers can pass it straight to `notes(in:)`.
+    func navigatorCategories() -> [String?] {
+        let names = categories()
+        let active = names.filter { !isArchived(category: $0) }
+        let archived = names.filter { isArchived(category: $0) }
+        return active + [nil] + archived
+    }
+
     /// All category names (immediate subfolders), sorted. Does not include Uncategorized.
     func categories() -> [String] {
         guard let root = requireRoot() else { return [] }
@@ -125,6 +134,7 @@ final class NoteStore {
     }
 
     /// All notes across the whole store, newest first by modified date.
+    /// Includes notes in archived folders; the popover uses `visibleNotes()` instead.
     func allNotes() -> [Note] {
         guard let root = requireRoot() else { return [] }
         var result: [Note] = []
@@ -132,9 +142,37 @@ final class NoteStore {
         return result.sorted { $0.modifiedAt > $1.modifiedAt }
     }
 
+    /// Notes that belong in the menu-bar popover: everything except those in archived folders.
+    /// Uncategorized notes are never hidden this way, because Uncategorized is not a folder.
+    func visibleNotes() -> [Note] {
+        allNotes().filter { !isArchived(category: $0.category) }
+    }
+
     /// Notes for a given category. Pass nil for Uncategorized (root-level notes only).
     func notes(in category: String?) -> [Note] {
         return allNotes().filter { $0.category == category }
+    }
+
+    /// Folder URL for a category name without creating it. Nil for Uncategorized or a bad name.
+    private func existingFolderURL(for category: String) -> URL? {
+        guard let root = requireRoot(), let safe = Self.sanitizeCategory(category) else { return nil }
+        return root.appendingPathComponent(safe, isDirectory: true)
+    }
+
+    /// Whether `category` is flagged archived. Nil / Uncategorized is never archived.
+    func isArchived(category: String?) -> Bool {
+        guard let category, let folder = existingFolderURL(for: category) else { return false }
+        return NoteMetadataStore.shared.isArchived(folder: folder)
+    }
+
+    /// Record (or clear) the archive flag on a category folder. Posts `.notesDidChange`.
+    @discardableResult
+    func setArchived(_ archived: Bool, category: String) -> Bool {
+        guard let folder = existingFolderURL(for: category) else { return false }
+        guard isArchived(category: category) != archived else { return true }
+        NoteMetadataStore.shared.setArchived(archived, folder: folder)
+        postChange()
+        return true
     }
 
     private func collectNotes(in dir: URL, root: URL, into result: inout [Note]) {

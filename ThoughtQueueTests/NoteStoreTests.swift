@@ -129,6 +129,25 @@ final class NoteStoreTests: XCTestCase {
         XCTAssertEqual(store.allNotes().count, 2)
     }
 
+    func testNavigatorCategoriesPutsArchivedLast() throws {
+        _ = store.createNote(title: "A", body: "x", category: "Work")
+        _ = store.createNote(title: "B", body: "x", category: "Done")
+        _ = store.createNote(title: "C", body: "x", category: nil)
+        _ = store.createNote(title: "D", body: "x", category: "Alpha")
+        XCTAssertTrue(store.setArchived(true, category: "Done"))
+        XCTAssertEqual(store.navigatorCategories(), ["Alpha", "Work", nil, "Done"])
+    }
+
+    func testVisibleNotesOmitsArchivedFolders() throws {
+        _ = store.createNote(title: "RootNote", body: "x", category: nil)
+        _ = store.createNote(title: "WorkNote", body: "x", category: "Work")
+        _ = store.createNote(title: "OldNote", body: "x", category: "Done")
+        XCTAssertTrue(store.setArchived(true, category: "Done"))
+        XCTAssertEqual(store.allNotes().count, 3)
+        XCTAssertEqual(store.visibleNotes().count, 2)
+        XCTAssertFalse(store.visibleNotes().contains { $0.category == "Done" })
+    }
+
     func testCategoryDerivedFromNestedPath() throws {
         // A note placed directly in a subfolder gets that folder as its category.
         let work = tempRoot.appendingPathComponent("Projects", isDirectory: true)

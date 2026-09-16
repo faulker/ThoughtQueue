@@ -1,6 +1,6 @@
 import Cocoa
 
-/// Singleton window for adding, renaming, and deleting category folders.
+/// Singleton window for adding, renaming, archiving, and deleting category folders.
 final class CategoryManagerWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
     static let shared = CategoryManagerWindowController()
 
@@ -8,9 +8,10 @@ final class CategoryManagerWindowController: NSWindowController, NSTableViewData
     private var categories: [String] = []
     private var addButton: ThemedButton!
     private var renameButton: ThemedButton!
+    private var archiveButton: ThemedButton!
     private var deleteButton: ThemedButton!
 
-    static let contentSize = NSSize(width: 420, height: 360)
+    static let contentSize = NSSize(width: 520, height: 360)
 
     convenience init() {
         let window = NSWindow(
@@ -20,7 +21,7 @@ final class CategoryManagerWindowController: NSWindowController, NSTableViewData
             defer: false
         )
         window.title = "Categories"
-        window.minSize = NSSize(width: 360, height: 280)
+        window.minSize = NSSize(width: 460, height: 280)
         window.center()
         self.init(window: window)
         setupUI()
@@ -42,7 +43,7 @@ final class CategoryManagerWindowController: NSWindowController, NSTableViewData
         title.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(title)
 
-        let subtitle = NSTextField(labelWithString: "Folders in your store. Deleting a category moves its notes to Uncategorized.")
+        let subtitle = NSTextField(labelWithString: "Folders in your store. Archive hides a folder's notes from the menu bar list. Deleting a category moves its notes to Uncategorized.")
         subtitle.font = Theme.body(12)
         subtitle.textColor = Theme.textSecondary
         subtitle.maximumNumberOfLines = 2
@@ -75,9 +76,11 @@ final class CategoryManagerWindowController: NSWindowController, NSTableViewData
 
         addButton = ThemedButton(title: "Add", prominent: true, target: self, action: #selector(addCategory))
         renameButton = ThemedButton(title: "Rename", prominent: false, target: self, action: #selector(renameCategory))
+        archiveButton = ThemedButton(title: "Archive", prominent: false, target: self, action: #selector(toggleArchive))
         deleteButton = ThemedButton(title: "Delete", prominent: false, target: self, action: #selector(deleteCategory))
         content.addSubview(addButton)
         content.addSubview(renameButton)
+        content.addSubview(archiveButton)
         content.addSubview(deleteButton)
 
         NSLayoutConstraint.activate([
@@ -102,7 +105,11 @@ final class CategoryManagerWindowController: NSWindowController, NSTableViewData
             renameButton.centerYAnchor.constraint(equalTo: addButton.centerYAnchor),
             renameButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 80),
 
-            deleteButton.leadingAnchor.constraint(equalTo: renameButton.trailingAnchor, constant: 8),
+            archiveButton.leadingAnchor.constraint(equalTo: renameButton.trailingAnchor, constant: 8),
+            archiveButton.centerYAnchor.constraint(equalTo: addButton.centerYAnchor),
+            archiveButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 80),
+
+            deleteButton.leadingAnchor.constraint(equalTo: archiveButton.trailingAnchor, constant: 8),
             deleteButton.centerYAnchor.constraint(equalTo: addButton.centerYAnchor),
             deleteButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 80),
         ])
@@ -138,7 +145,13 @@ final class CategoryManagerWindowController: NSWindowController, NSTableViewData
     private func updateButtonState() {
         let hasSelection = selectedCategory() != nil
         renameButton.isEnabled = hasSelection
+        archiveButton.isEnabled = hasSelection
         deleteButton.isEnabled = hasSelection
+        if let name = selectedCategory(), NoteStore.shared.isArchived(category: name) {
+            archiveButton.title = "Unarchive"
+        } else {
+            archiveButton.title = "Archive"
+        }
     }
 
     // MARK: - Actions
@@ -174,6 +187,21 @@ final class CategoryManagerWindowController: NSWindowController, NSTableViewData
         }
         reload()
         if let row = categories.firstIndex(of: safe) {
+            tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            updateButtonState()
+        }
+    }
+
+    /// Toggle the archive flag on the selected category. Archived notes stay on disk.
+    @objc private func toggleArchive() {
+        guard let current = selectedCategory() else { return }
+        let archived = NoteStore.shared.isArchived(category: current)
+        guard NoteStore.shared.setArchived(!archived, category: current) else {
+            ToastWindow.show(message: "Could not update category")
+            return
+        }
+        reload()
+        if let row = categories.firstIndex(of: current) {
             tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
             updateButtonState()
         }
@@ -246,7 +274,16 @@ final class CategoryManagerWindowController: NSWindowController, NSTableViewData
         countLabel.textColor = Theme.textSecondary
         countLabel.setContentHuggingPriority(.required, for: .horizontal)
 
-        let stack = NSStackView(views: [swatch, label, countLabel])
+        var views: [NSView] = [swatch, label]
+        if NoteStore.shared.isArchived(category: name) {
+            let badge = NSTextField(labelWithString: "Archived")
+            badge.font = Theme.body(11)
+            badge.textColor = Theme.textSecondary
+            badge.setContentHuggingPriority(.required, for: .horizontal)
+            views.append(badge)
+        }
+        views.append(countLabel)
+        let stack = NSStackView(views: views)
         stack.orientation = .horizontal
         stack.spacing = 8
         stack.alignment = .centerY
