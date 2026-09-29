@@ -18,6 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Apply a stored light/dark override before any window is created (a no-op for the
         // default "system" mode, since NSApp.appearance already starts nil).
         PreferencesManager.applyThemeMode(PreferencesManager.shared.themeMode)
+        // Load custom theme files and activate the chosen light/dark palettes.
+        ThemeLibrary.shared.reload()
+        ThemeLibrary.shared.apply()
 
         // Show button/icon tooltips almost immediately instead of after the ~1s default (fix #4).
         UserDefaults.standard.set(150, forKey: "NSInitialToolTipDelay")

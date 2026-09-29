@@ -19,12 +19,13 @@ You're reading something, debugging code, or thinking out loud and want to jot i
 - **Navigation panel** -- the note window has a collapsible panel on the left listing every note grouped by category, with a search field. Hidden by default; the sidebar button in the header (or Ctrl+Cmd+S) reveals it, and picking a note switches the window over to it
 - **Copy, don't just open** -- one click to copy a note's full body or its file path straight to the clipboard, right from its row
 - **Clone note** -- duplicate a note from the popover row; the copy keeps the same body and category, titled `copy <original>`
-- **Run notes anywhere** -- configurable "Open With" destinations: run a shell command against the note's file (open it in an editor, hand it to a CLI tool, whatever `{path}` template you want), or paste it into an app like Claude Desktop. Comes with Claude and Zed presets; add, edit, or remove your own in Preferences
+- **Run notes anywhere** -- configurable "Open With" destinations: run a shell command against the note's file (open it in an editor, hand it to a CLI tool, whatever `{path}` template you want), or paste it into an app like Claude Desktop. No actions are set up by default; add, edit, or remove your own in Preferences
 - **Categories** -- organize notes however you want; create, rename, move between, archive, or delete categories, with folders on disk to match. Archived folders stay on disk but their notes drop out of the menu bar list. New categories can also be created inline from any category dropdown
 - **Working document** -- optionally designate one note as the default sink so quick captures append to it instead of creating a new file each time
 - **On-device auto-title & auto-category** -- optional, macOS 26+: suggests a title and category for each capture via Apple's on-device model, with a review toast to accept, tweak, or dismiss
 - **Local, plain-text storage** -- notes are `.md` files in a folder you choose; no database, so they're greppable and easy to sync or back up yourself
 - **Synced settings** -- on by default: your preferences (hotkeys, fonts, Open With actions, and the rest) are mirrored into the store folder, so if that folder is in iCloud/Dropbox they follow you to your other devices. Turn it off in Preferences to keep settings local
+- **Themes** -- pick a light and a dark theme (built-ins: Organic Light, Porcelain, Organic Dark, Midnight), or load your own JSON theme files
 - **Customizable hotkeys** -- change shortcuts in Preferences
 - **Auto-update** -- for installed / downloaded copies, checks GitHub Releases at launch and on an interval you choose, then offers to download, verify, install, and restart itself. Local Xcode / `build.sh` builds skip this. Turn it off or check on demand in Preferences
 
@@ -54,7 +55,7 @@ Configure appearance, hotkeys, "Open With" destinations, fonts, auto-update inte
 
 - macOS 14.0+ (macOS 26+ for optional on-device auto-title/auto-category)
 - Xcode 16.0+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (for building from source)
-- Nothing else is required out of the box -- [Claude Desktop](https://claude.ai/download) and [Zed](https://zed.dev) are just the built-in "Open With" presets; wire up any app or command you actually use instead
+- Nothing else is required out of the box. "Open With" actions start empty; wire up any app or command you actually use, such as [Claude Desktop](https://claude.ai/download) or [Zed](https://zed.dev)
 
 ## Install
 
@@ -189,9 +190,9 @@ Click the **Copy note** icon on any row to copy its full body, or **Copy path** 
 Click **Open With** (or the arrow icon on a row) to send a note to one of your configured destinations. Two kinds of destination:
 
 - **Command** -- runs a shell command with the note's file path substituted in, e.g. `zed {path}` or `code {path}`. Point it at any editor or CLI tool.
-- **App input** -- activates an app and either types `@<path>` (file-reference style, what the Claude preset uses) or pastes the note's full body.
+- **App input** -- activates an app and either types `@<path>` (file-reference style, which suits Claude Desktop) or pastes the note's full body.
 
-Configure destinations in **Preferences > Open With actions**: add, edit, delete, or reset to the built-in Claude/Zed presets.
+Configure destinations in **Preferences > Open With actions**: add, edit, or delete your own actions. None are created by default.
 
 ### Edit a note
 
@@ -229,6 +230,10 @@ lost either way.
 ### Organize with categories
 
 Open **Categories…** from the menu bar icon's right-click menu to add, rename, archive, or delete category folders (deleting moves notes to Uncategorized). Archive hides that folder's notes from the menu bar popover; they stay on disk and still show in the note window's navigation panel (at the bottom, marked archived) and in the category picker. To move a note into a different category, use the category dropdown in the note window; it also offers **New Category** to create and move in one step.
+
+### Change the theme
+
+**Preferences > Appearance** has a Dark/Light/System toggle plus two pickers: the theme used in light appearance (Organic Light or Porcelain) and the one used in dark appearance (Organic Dark or Midnight). Changes apply immediately. To make your own, write a JSON theme file and use **Import Theme…**, or drop it into the folder that **Open Themes Folder** reveals and press **Reload**. The format and a full example are in [docs/themes.md](docs/themes.md).
 
 ### Change the interface font
 

@@ -17,7 +17,9 @@
 		32A2ED59659481A0935A4CF3 /* NoteMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BA1D1194263C95A089D013F /* NoteMetadata.swift */; };
 		3F202CF382553C98D774118F /* ChecklistRowsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0349630BE56F7AE1598770 /* ChecklistRowsTests.swift */; };
 		5061115D8FED3350D0C77278 /* ToastWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1D741EA098FEA403F3A713 /* ToastWindow.swift */; };
+		5426DAC7E8D5080770B92877 /* ThemePalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42FDA44E4E293B365493703 /* ThemePalette.swift */; };
 		56DA9797DC951B6D0946C457 /* ChecklistViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3BA7BCB7F16DE095C4BA7E0 /* ChecklistViewController.swift */; };
+		57EFDB0B47D86931D02F4980 /* ThemeLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9531114AD9C7E85E52BC5EEF /* ThemeLibrary.swift */; };
 		5A40D7E39478666E48DE2E96 /* ChecklistEditorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A7EA4608600D511EBDE3330 /* ChecklistEditorTests.swift */; };
 		5B45DA1A806D3B0BCC7D8412 /* UIFontPreferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96CBBBE98C0F41A86E34B5F6 /* UIFontPreferenceTests.swift */; };
 		644BBD5A402C82BEA5090851 /* AutoIntelService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64EBD6B26F170099FE531BC2 /* AutoIntelService.swift */; };
@@ -48,6 +50,7 @@
 		CE31692FCD718B50313E7292 /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 820DCC5FE0F2B837244A7F30 /* MarkdownRenderer.swift */; };
 		D0FF3DD70CC5CB74BF4C973E /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AA1FEEEBECAED63C7A00726 /* UpdateService.swift */; };
 		D1F6A019C657C5CB208A2479 /* TaskListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F56BCE26B12EEEDDE613ED6F /* TaskListTests.swift */; };
+		D8BD6159F9A914BFFD468E43 /* ThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA00AFD95DFD2ECB48888321 /* ThemeTests.swift */; };
 		DC6DDA37BE3D64EA09682D6F /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8147A07E5B7396382827499D /* Theme.swift */; };
 		DDA17C113C96444ECC170AF5 /* CaptureServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96450E0A3079E1CC546A7295 /* CaptureServiceTests.swift */; };
 		DE998EE724844897BC40D724 /* StatusItemMenuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAE848DB27CC3C7494C6308D /* StatusItemMenuTests.swift */; };
@@ -100,6 +103,7 @@
 		84743BB203834FF8EE6CE272 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		8A7EF92C8ACC9C33D7C5FA64 /* OpenWithTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWithTests.swift; sourceTree = "<group>"; };
 		94836FE437148129DAEB26AC /* FolderWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderWatcher.swift; sourceTree = "<group>"; };
+		9531114AD9C7E85E52BC5EEF /* ThemeLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeLibrary.swift; sourceTree = "<group>"; };
 		96450E0A3079E1CC546A7295 /* CaptureServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureServiceTests.swift; sourceTree = "<group>"; };
 		96CBBBE98C0F41A86E34B5F6 /* UIFontPreferenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIFontPreferenceTests.swift; sourceTree = "<group>"; };
 		98338EB2FC611F4C84B0975B /* NoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStore.swift; sourceTree = "<group>"; };
@@ -112,7 +116,9 @@
 		BEC71685D27919559190BA8B /* TaskListRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListRows.swift; sourceTree = "<group>"; };
 		C3BA7BCB7F16DE095C4BA7E0 /* ChecklistViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistViewController.swift; sourceTree = "<group>"; };
 		C42D0B524E5A0030EE24FF49 /* UpdateServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateServiceTests.swift; sourceTree = "<group>"; };
+		C42FDA44E4E293B365493703 /* ThemePalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePalette.swift; sourceTree = "<group>"; };
 		C6424BACF22EB02E2E5490C9 /* NoteMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteMetadataTests.swift; sourceTree = "<group>"; };
+		CA00AFD95DFD2ECB48888321 /* ThemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeTests.swift; sourceTree = "<group>"; };
 		CD3ED5F71DE593D4B1CC5DA3 /* CategoryManagerWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryManagerWindowController.swift; sourceTree = "<group>"; };
 		D19EA2444190D4504688A141 /* AutoIntelServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoIntelServiceTests.swift; sourceTree = "<group>"; };
 		E05F515D90AD6F46A3322E16 /* SettingsSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSync.swift; sourceTree = "<group>"; };
@@ -190,6 +196,7 @@
 				A8673FE14EFCB456AC0B0DD0 /* ReviewToast.swift */,
 				8147A07E5B7396382827499D /* Theme.swift */,
 				4A287E8F69BF7C1D0315654F /* ThemedControls.swift */,
+				C42FDA44E4E293B365493703 /* ThemePalette.swift */,
 				0A1D741EA098FEA403F3A713 /* ToastWindow.swift */,
 			);
 			path = Views;
@@ -215,6 +222,7 @@
 				EAE848DB27CC3C7494C6308D /* StatusItemMenuTests.swift */,
 				F56BCE26B12EEEDDE613ED6F /* TaskListTests.swift */,
 				4BA91E1F8AD5E8CBCB257E04 /* TaskToggleTests.swift */,
+				CA00AFD95DFD2ECB48888321 /* ThemeTests.swift */,
 				96CBBBE98C0F41A86E34B5F6 /* UIFontPreferenceTests.swift */,
 				C42D0B524E5A0030EE24FF49 /* UpdateServiceTests.swift */,
 			);
@@ -230,6 +238,7 @@
 				81505E0C24015CF74D55C25E /* OpenWithService.swift */,
 				7B3AEE9D555745E4BBD03DAB /* PreferencesManager.swift */,
 				E05F515D90AD6F46A3322E16 /* SettingsSync.swift */,
+				9531114AD9C7E85E52BC5EEF /* ThemeLibrary.swift */,
 				3AA1FEEEBECAED63C7A00726 /* UpdateService.swift */,
 			);
 			path = Services;
@@ -355,6 +364,8 @@
 				E0E008FCBCEB5B5B33EFB562 /* TaskList.swift in Sources */,
 				B66D774E9DB1C8C4D5F0CFC6 /* TaskListRows.swift in Sources */,
 				DC6DDA37BE3D64EA09682D6F /* Theme.swift in Sources */,
+				57EFDB0B47D86931D02F4980 /* ThemeLibrary.swift in Sources */,
+				5426DAC7E8D5080770B92877 /* ThemePalette.swift in Sources */,
 				8C50371AF57E54D18011E0F2 /* ThemedControls.swift in Sources */,
 				5061115D8FED3350D0C77278 /* ToastWindow.swift in Sources */,
 				D0FF3DD70CC5CB74BF4C973E /* UpdateService.swift in Sources */,
@@ -383,6 +394,7 @@
 				DE998EE724844897BC40D724 /* StatusItemMenuTests.swift in Sources */,
 				D1F6A019C657C5CB208A2479 /* TaskListTests.swift in Sources */,
 				953592C3098E8486510A455A /* TaskToggleTests.swift in Sources */,
+				D8BD6159F9A914BFFD468E43 /* ThemeTests.swift in Sources */,
 				5B45DA1A806D3B0BCC7D8412 /* UIFontPreferenceTests.swift in Sources */,
 				C6D1E04CD782B80CCF66EF9A /* UpdateServiceTests.swift in Sources */,
 			);

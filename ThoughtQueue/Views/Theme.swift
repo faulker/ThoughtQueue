@@ -26,49 +26,67 @@ extension NSColor {
     }
 }
 
-/// The app's "Organic" visual identity: a warm cream/sage palette in light mode with a matching
-/// warm dark counterpart, Figtree for UI text, Georgia for the bold accent labels the design uses
-/// on buttons and section headers, and shared corner-radius constants. Every color is a dynamic
-/// `NSColor` pair so views built from these tokens repaint correctly when the system appearance
-/// changes; nothing here needs manual light/dark handling at the call site.
+/// The app's visual identity: color tokens resolved through the active light/dark `ThemePalette`
+/// (Organic by default, see `ThemeLibrary` for built-in and custom themes), Figtree for UI text,
+/// Georgia for the bold accent labels the design uses on buttons and section headers, and shared
+/// corner-radius constants. Every color is dynamic, so views built from these tokens repaint
+/// correctly when the appearance or theme changes; nothing here needs manual light/dark handling
+/// at the call site.
 enum Theme {
+
+    // MARK: - Active palettes
+
+    /// The palette used whenever the effective appearance is light. Set by `ThemeLibrary`.
+    static var lightPalette: ThemePalette = .organicLight
+    /// The palette used whenever the effective appearance is dark. Set by `ThemeLibrary`.
+    static var darkPalette: ThemePalette = .organicDark
+
+    /// The palette a given appearance draws with.
+    static func palette(for appearance: NSAppearance) -> ThemePalette {
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? darkPalette : lightPalette
+    }
+
+    /// A dynamic color that looks the token up in whichever palette is active for the drawing
+    /// appearance, re-evaluated on every draw, so swapping `lightPalette`/`darkPalette` (plus a
+    /// redraw) retints everything built from these tokens.
+    private static func token(_ path: KeyPath<ThemePalette, NSColor>) -> NSColor {
+        NSColor(name: nil) { appearance in palette(for: appearance)[keyPath: path] }
+    }
 
     // MARK: - Surfaces
 
     /// Card/window content background (popover, note window, settings, sidebar panels).
-    static let surface = NSColor(light: NSColor(hex: "#f9f4ed"), dark: NSColor(hex: "#211e19"))
+    static let surface = token(\.surface)
     /// Input/search field and "pill" background.
-    static let fieldBackground = NSColor(light: NSColor(hex: "#ebddc5"), dark: NSColor(hex: "#34302a"))
-    static let fieldBorder = NSColor(light: NSColor(hex: "#c0b6a5"), dark: NSColor(hex: "#4a453c"))
+    static let fieldBackground = token(\.fieldBackground)
+    static let fieldBorder = token(\.fieldBorder)
     /// A row's background on hover/highlight (notes list, collections list).
-    static let hoverRow = NSColor(light: NSColor(hex: "#f2ead9"), dark: NSColor(hex: "#2a261f"))
+    static let hoverRow = token(\.hoverRow)
     /// Hairline dividers and card borders.
-    static let divider = NSColor(light: NSColor(hex: "#201e1d").withAlphaComponent(0.12),
-                                  dark: NSColor.white.withAlphaComponent(0.12))
+    static let divider = token(\.divider)
 
     // MARK: - Text & icons
 
-    static let textPrimary = NSColor(light: NSColor(hex: "#201e1d"), dark: NSColor(hex: "#f1e9db"))
-    static let textSecondary = NSColor(light: NSColor(hex: "#82796a"), dark: NSColor(hex: "#a89a86"))
-    static let iconStroke = NSColor(light: NSColor(hex: "#645c50"), dark: NSColor(hex: "#b3a693"))
+    static let textPrimary = token(\.textPrimary)
+    static let textSecondary = token(\.textSecondary)
+    static let iconStroke = token(\.iconStroke)
 
-    // MARK: - Sage accent
+    // MARK: - Accent
 
-    static let accent = NSColor(light: NSColor(hex: "#7a8a5e"), dark: NSColor(hex: "#8fa06d"))
-    static let accentBorder = NSColor(light: NSColor(hex: "#56633f"), dark: NSColor(hex: "#6b7a4f"))
+    static let accent = token(\.accent)
+    static let accentBorder = token(\.accentBorder)
     /// Text/icon color drawn on top of a solid `accent` fill.
-    static let accentText = NSColor(light: NSColor(hex: "#f0fae1"), dark: NSColor(hex: "#1c2410"))
+    static let accentText = token(\.accentText)
     /// A soft accent wash used for selected rows, checked checkboxes, and the pinned-state button.
-    static let accentSoftBackground = NSColor(light: NSColor(hex: "#ccdbb2"), dark: NSColor(hex: "#333d24"))
-    static let accentSoftBorder = NSColor(light: NSColor(hex: "#aebf92"), dark: NSColor(hex: "#4c5a37"))
+    static let accentSoftBackground = token(\.accentSoftBackground)
+    static let accentSoftBorder = token(\.accentSoftBorder)
     /// A lighter accent wash for a selected list row (subtler than `accentSoftBackground`).
-    static let accentSelectionBackground = NSColor(light: NSColor(hex: "#ebddc5"), dark: NSColor(hex: "#332f27"))
+    static let accentSelectionBackground = token(\.accentSelectionBackground)
 
-    static let danger = NSColor(light: NSColor(hex: "#c0301b"), dark: NSColor(hex: "#ff6b52"))
+    static let danger = token(\.danger)
 
     /// Background behind a hovered icon-only button (row actions, header icons).
-    static let iconHoverBackground = NSColor(light: NSColor.black.withAlphaComponent(0.06),
-                                              dark: NSColor.white.withAlphaComponent(0.10))
+    static let iconHoverBackground = token(\.iconHoverBackground)
 
     // MARK: - Category tints
 
@@ -77,24 +95,18 @@ enum Theme {
         let foreground: NSColor
     }
 
-    /// A small rotating palette of warm/sage tints for category pills and icons (the design has
-    /// no per-category color data, so categories are assigned one deterministically by name).
-    private static let categoryTints: [CategoryTint] = [
-        CategoryTint(background: NSColor(light: NSColor(hex: "#fff2eb"), dark: NSColor(hex: "#3a2a1f")),
-                     foreground: NSColor(light: NSColor(hex: "#8c491a"), dark: NSColor(hex: "#e8a06a"))),
-        CategoryTint(background: NSColor(light: NSColor(hex: "#f0fae1"), dark: NSColor(hex: "#2c3322")),
-                     foreground: NSColor(light: NSColor(hex: "#3d472b"), dark: NSColor(hex: "#b9cf94"))),
-        CategoryTint(background: NSColor(light: NSColor(hex: "#ffe1d0"), dark: NSColor(hex: "#402c1f")),
-                     foreground: NSColor(light: NSColor(hex: "#8c491a"), dark: NSColor(hex: "#eda876"))),
-        CategoryTint(background: NSColor(light: NSColor(hex: "#e1eecc"), dark: NSColor(hex: "#29331f")),
-                     foreground: NSColor(light: NSColor(hex: "#3d472b"), dark: NSColor(hex: "#c3d99e"))),
-    ]
-
-    /// A stable tint for a category name: the same name always maps to the same color within a
-    /// run (and across runs, since it's derived from the string itself, not insertion order).
+    /// A stable tint for a category name, drawn from the active palette's `categoryTints`
+    /// (each appearance's list may have its own length, so the index wraps per palette).
     static func categoryTint(for name: String) -> CategoryTint {
-        let index = abs(name.hashValue) % categoryTints.count
-        return categoryTints[index]
+        let index = abs(name.hashValue)
+        func pick(_ appearance: NSAppearance) -> ThemePalette.Tint {
+            let tints = palette(for: appearance).categoryTints
+            return tints[index % tints.count]
+        }
+        return CategoryTint(
+            background: NSColor(name: nil) { pick($0).background },
+            foreground: NSColor(name: nil) { pick($0).foreground }
+        )
     }
 
     // MARK: - Corner radii

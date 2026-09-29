@@ -30,6 +30,10 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     /// system font, otherwise an installed family name.
     private var uiFontFamilyChoices: [String?] = []
     private let themeToggle = SegmentedPillControl(titles: ["Dark", "Light", "System"])
+    private let lightThemePopup = NSPopUpButton()
+    private let darkThemePopup = NSPopUpButton()
+    /// Load errors for custom theme files, one per line; hidden when every file loaded.
+    private let themeFailuresLabel = NSTextField(wrappingLabelWithString: "")
     private let timeoutField = NSTextField()
     private let openWithTable = NSTableView()
     private let updateVersionLabel = NSTextField(labelWithString: "")
@@ -120,6 +124,24 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
             PreferencesManager.shared.themeMode = [.dark, .light, .system][index]
         }
         stack.addArrangedSubview(themeToggle)
+        lightThemePopup.target = self
+        lightThemePopup.action = #selector(lightThemeChanged)
+        darkThemePopup.target = self
+        darkThemePopup.action = #selector(darkThemeChanged)
+        stack.addArrangedSubview(row([fixedLabel("Light:", 60), lightThemePopup]))
+        stack.addArrangedSubview(row([fixedLabel("Dark:", 60), darkThemePopup]))
+        let importThemeBtn = NSButton(title: "Import Theme\u{2026}", target: self, action: #selector(importTheme))
+        importThemeBtn.bezelStyle = .rounded
+        let openThemesBtn = NSButton(title: "Open Themes Folder", target: self, action: #selector(openThemesFolder))
+        openThemesBtn.bezelStyle = .rounded
+        let reloadThemesBtn = NSButton(title: "Reload", target: self, action: #selector(reloadThemes))
+        reloadThemesBtn.bezelStyle = .rounded
+        stack.addArrangedSubview(row([importThemeBtn, openThemesBtn, reloadThemesBtn]))
+        themeFailuresLabel.font = Theme.body(11)
+        themeFailuresLabel.textColor = Theme.danger
+        themeFailuresLabel.preferredMaxLayoutWidth = PreferencesWindowController.contentSize.width - 40
+        stack.addArrangedSubview(themeFailuresLabel)
+        refreshThemeControls()
 
         // Interface font (the app's own chrome, not the note body)
         stack.addArrangedSubview(sectionLabel("Interface font"))
@@ -201,12 +223,16 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         owScroll.translatesAutoresizingMaskIntoConstraints = false
         owScroll.hasVerticalScroller = true
         owScroll.borderType = .bezelBorder
+        // Breathing room so the first row isn't pressed against the box's top edge.
+        owScroll.automaticallyAdjustsContentInsets = false
+        owScroll.contentInsets = NSEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
         owScroll.documentView = openWithTable
         owScroll.heightAnchor.constraint(equalToConstant: 100).isActive = true
         owScroll.widthAnchor.constraint(equalToConstant: 470).isActive = true
         let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("ow"))
         openWithTable.addTableColumn(col)
         openWithTable.headerView = nil
+        openWithTable.rowHeight = 22
         openWithTable.delegate = self
         openWithTable.dataSource = self
         stack.addArrangedSubview(owScroll)
@@ -216,9 +242,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         editOWBtn.bezelStyle = .rounded
         let deleteOWBtn = NSButton(title: "Delete", target: self, action: #selector(deleteOpenWith))
         deleteOWBtn.bezelStyle = .rounded
-        let resetOWBtn = NSButton(title: "Reset defaults", target: self, action: #selector(resetOpenWith))
-        resetOWBtn.bezelStyle = .rounded
-        stack.addArrangedSubview(row([addOWBtn, editOWBtn, deleteOWBtn, resetOWBtn]))
+        stack.addArrangedSubview(row([addOWBtn, editOWBtn, deleteOWBtn]))
 
         // Updates
         stack.addArrangedSubview(sectionLabel("Updates"))
@@ -395,6 +419,81 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         }
     }
 
+    // MARK: - Themes
+
+    /// Refill both theme popups from `ThemeLibrary`, select the stored choices, and show any
+    /// custom files that failed to load.
+    private func refreshThemeControls() {
+        let library = ThemeLibrary.shared
+        let prefs = PreferencesManager.shared
+        fillThemePopup(lightThemePopup, themes: library.themes(for: .light),
+                       selected: library.resolve(id: prefs.lightThemeID, appearance: .light).id)
+        fillThemePopup(darkThemePopup, themes: library.themes(for: .dark),
+                       selected: library.resolve(id: prefs.darkThemeID, appearance: .dark).id)
+        let failures = library.failures.map { "\($0.fileName): \($0.reason)" }
+        themeFailuresLabel.stringValue = failures.joined(separator: "\n")
+        themeFailuresLabel.isHidden = failures.isEmpty
+    }
+
+    /// Each item carries its theme id as `representedObject`; custom themes are marked.
+    private func fillThemePopup(_ popup: NSPopUpButton, themes: [ThemePalette], selected: String) {
+        popup.removeAllItems()
+        for theme in themes {
+            popup.addItem(withTitle: theme.isBuiltIn ? theme.name : "\(theme.name) (custom)")
+            popup.lastItem?.representedObject = theme.id
+        }
+        if let index = themes.firstIndex(where: { $0.id == selected }) { popup.selectItem(at: index) }
+    }
+
+    @objc private func lightThemeChanged(_ sender: NSPopUpButton) {
+        PreferencesManager.shared.lightThemeID = sender.selectedItem?.representedObject as? String
+    }
+
+    @objc private func darkThemeChanged(_ sender: NSPopUpButton) {
+        PreferencesManager.shared.darkThemeID = sender.selectedItem?.representedObject as? String
+    }
+
+    /// Pick a theme JSON file, copy it into the Themes folder, and switch to it for its appearance.
+    @objc private func importTheme() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.json]
+        panel.prompt = "Import"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let theme = try ThemeLibrary.shared.importTheme(from: url)
+            switch theme.appearance {
+            case .light: PreferencesManager.shared.lightThemeID = theme.id
+            case .dark: PreferencesManager.shared.darkThemeID = theme.id
+            }
+            refreshThemeControls()
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Couldn't import theme"
+            alert.informativeText = "\(error)"
+            alert.alertStyle = .warning
+            alert.runModal()
+        }
+    }
+
+    @objc private func openThemesFolder() {
+        do {
+            NSWorkspace.shared.open(try ThemeLibrary.shared.ensureFolder())
+        } catch {
+            themeFailuresLabel.stringValue = "Couldn't create the Themes folder: \(error.localizedDescription)"
+            themeFailuresLabel.isHidden = false
+        }
+    }
+
+    /// Re-read the Themes folder after the user edits a file by hand, and re-apply.
+    @objc private func reloadThemes() {
+        ThemeLibrary.shared.reload()
+        ThemeLibrary.shared.apply()
+        refreshThemeControls()
+    }
+
     // MARK: - Interface font
 
     /// Fill the family and size popups and select whatever is currently stored.
@@ -508,12 +607,6 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
                 self.updateStatusLabel.stringValue = "Check failed: \(error.localizedDescription)"
             }
         }
-    }
-
-    @objc private func resetOpenWith() {
-        openWithActions = OpenWithAction.presets
-        PreferencesManager.shared.openWithActions = openWithActions
-        openWithTable.reloadData()
     }
 
     @objc private func addOpenWith() {
@@ -706,7 +799,17 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         let label = NSTextField(labelWithString: "\(a.name) — \(detail)")
         label.font = .systemFont(ofSize: 12)
         label.lineBreakMode = .byTruncatingTail
-        return label
+        label.translatesAutoresizingMaskIntoConstraints = false
+        // Wrap so the label can be vertically centered and inset within the taller row.
+        let cell = NSTableCellView()
+        cell.addSubview(label)
+        cell.textField = label
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 6),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -6),
+            label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+        ])
+        return cell
     }
 }
 

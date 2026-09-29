@@ -77,6 +77,8 @@ final class PreferencesManager {
         static let updateCheckIntervalHours = "updateCheckIntervalHours"
         static let lastUpdateCheckAt = "lastUpdateCheckAt"
         static let themeMode = "themeMode"
+        static let lightThemeID = "lightThemeID"
+        static let darkThemeID = "darkThemeID"
     }
 
     private init() {}
@@ -97,7 +99,7 @@ final class PreferencesManager {
         Keys.noteAlwaysOnTop, Keys.noteWindowWidth, Keys.noteWindowHeight,
         Keys.noteNavigatorWidth,
         Keys.autoUpdateCheckEnabled, Keys.updateCheckIntervalHours,
-        Keys.themeMode,
+        Keys.themeMode, Keys.lightThemeID, Keys.darkThemeID,
     ]
 
     /// Whether syncable settings are mirrored into the store folder so other devices pointed at
@@ -213,6 +215,25 @@ final class PreferencesManager {
         case .light: NSApp.appearance = NSAppearance(named: .aqua)
         case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
         case .system: NSApp.appearance = nil
+        }
+    }
+
+    /// Id of the palette used in light appearance (`ThemePalette.id`). nil = Organic Light.
+    /// Setting it re-applies the themes so open windows repaint immediately.
+    var lightThemeID: String? {
+        get { defaults.string(forKey: Keys.lightThemeID) }
+        set {
+            defaults.set(newValue, forKey: Keys.lightThemeID)
+            ThemeLibrary.shared.apply()
+        }
+    }
+
+    /// Id of the palette used in dark appearance (`ThemePalette.id`). nil = Organic Dark.
+    var darkThemeID: String? {
+        get { defaults.string(forKey: Keys.darkThemeID) }
+        set {
+            defaults.set(newValue, forKey: Keys.darkThemeID)
+            ThemeLibrary.shared.apply()
         }
     }
 
@@ -412,21 +433,23 @@ final class PreferencesManager {
 
     // MARK: - Open-with actions
 
-    /// The configured open-with actions; seeded with Claude + Zed presets on first read.
+    /// The user's configured open-with actions. There are no built-in defaults, so this is
+    /// empty until the user adds one.
     var openWithActions: [OpenWithAction] {
         get {
-            guard let data = defaults.data(forKey: Keys.openWithActions),
-                  let actions = try? JSONDecoder().decode([OpenWithAction].self, from: data),
-                  !actions.isEmpty else {
-                return OpenWithAction.presets
-            }
-            return actions
+            guard let data = defaults.data(forKey: Keys.openWithActions) else { return [] }
+            return Self.decodeOpenWithActions(data)
         }
         set {
             if let data = try? JSONEncoder().encode(newValue) {
                 defaults.set(data, forKey: Keys.openWithActions)
             }
         }
+    }
+
+    /// Decode stored open-with actions, treating unreadable data as an empty list.
+    static func decodeOpenWithActions(_ data: Data) -> [OpenWithAction] {
+        (try? JSONDecoder().decode([OpenWithAction].self, from: data)) ?? []
     }
 
     /// The default open-with action (first in the list) used by the open-command click behavior.

@@ -26,24 +26,6 @@ struct OpenWithAction: Codable, Identifiable, Hashable {
     var appBundleId: String? = nil
     /// For appInput type: how to inject the note.
     var inputMode: OpenWithInputMode? = nil
-
-    /// Built-in presets: Claude (appInput, reference) and Zed (command).
-    static let presets: [OpenWithAction] = [
-        OpenWithAction(
-            name: "Claude",
-            type: .appInput,
-            commandTemplate: nil,
-            appBundleId: "com.anthropic.claudefordesktop",
-            inputMode: .reference
-        ),
-        OpenWithAction(
-            name: "Zed",
-            type: .command,
-            commandTemplate: "zed {path}",
-            appBundleId: nil,
-            inputMode: nil
-        ),
-    ]
 }
 
 /// Runs open-with actions. Command type shells out via Process; appInput type

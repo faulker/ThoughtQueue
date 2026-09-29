@@ -70,41 +70,29 @@ final class OpenWithTests: XCTestCase {
         XCTAssertEqual(OpenWithService.commandTemplate(forChosenURL: url), "open -a '/Applications/My Editor.app' {path}")
     }
 
-    // MARK: - Presets / action-type routing
+    // MARK: - Action-type routing / persistence
 
-    func testPresetsContainClaudeAndZed() throws {
-        let presets = OpenWithAction.presets
-        XCTAssertEqual(presets.count, 2)
-
-        let claude = try XCTUnwrap(presets.first { $0.name == "Claude" })
-        XCTAssertEqual(claude.type, .appInput)
-        XCTAssertEqual(claude.inputMode, .reference)
-        XCTAssertEqual(claude.appBundleId, "com.anthropic.claudefordesktop")
-
-        let zed = try XCTUnwrap(presets.first { $0.name == "Zed" })
-        XCTAssertEqual(zed.type, .command)
-        XCTAssertEqual(zed.commandTemplate, "zed {path}")
-    }
-
-    func testActionTypeRoutingFields() {
-        // command type carries a template, not an app bundle.
-        let zed = OpenWithAction.presets.first { $0.name == "Zed" }!
-        XCTAssertNotNil(zed.commandTemplate)
-        XCTAssertNil(zed.appBundleId)
-
-        // appInput type carries an app bundle + input mode, not a template.
-        let claude = OpenWithAction.presets.first { $0.name == "Claude" }!
-        XCTAssertNil(claude.commandTemplate)
-        XCTAssertNotNil(claude.appBundleId)
-        XCTAssertNotNil(claude.inputMode)
-    }
+    /// Sample user-created actions covering both action types.
+    private let sampleActions: [OpenWithAction] = [
+        OpenWithAction(name: "Claude", type: .appInput,
+                       appBundleId: "com.anthropic.claudefordesktop", inputMode: .reference),
+        OpenWithAction(name: "Zed", type: .command, commandTemplate: "zed {path}"),
+    ]
 
     func testActionCodableRoundTrip() throws {
-        let original = OpenWithAction.presets
-        let data = try JSONEncoder().encode(original)
+        let data = try JSONEncoder().encode(sampleActions)
         let decoded = try JSONDecoder().decode([OpenWithAction].self, from: data)
-        XCTAssertEqual(decoded.map(\.name), original.map(\.name))
-        XCTAssertEqual(decoded.map(\.type), original.map(\.type))
+        XCTAssertEqual(decoded, sampleActions)
+    }
+
+    func testDecodeStoredActionsHasNoBuiltInDefaults() throws {
+        // A user who deleted every action must get an empty list back, not re-seeded presets.
+        let empty = try JSONEncoder().encode([OpenWithAction]())
+        XCTAssertTrue(PreferencesManager.decodeOpenWithActions(empty).isEmpty)
+        XCTAssertTrue(PreferencesManager.decodeOpenWithActions(Data("garbage".utf8)).isEmpty)
+
+        let data = try JSONEncoder().encode(sampleActions)
+        XCTAssertEqual(PreferencesManager.decodeOpenWithActions(data), sampleActions)
     }
 
     func testReferenceInputModeFormat() {
