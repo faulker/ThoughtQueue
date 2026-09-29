@@ -1248,7 +1248,7 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         return true
     }
 
-    /// Intercept Return so typing a checklist continues it. Everything else falls through.
+    /// Intercept Return so typing a task, bullet, or numbered list continues it. Everything else falls through.
     func textView(_ view: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         guard commandSelector == #selector(NSResponder.insertNewline(_:)), isEditing else {
             return false
@@ -1256,7 +1256,7 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         return continueTaskList()
     }
 
-    /// Handle Return on a task line: continue the list, or clear an empty item to end it.
+    /// Handle Return on a list line: continue the list, or clear an empty item to end it.
     /// Returns false to let AppKit insert a plain newline.
     func continueTaskList() -> Bool {
         let selection = textView.selectedRange()

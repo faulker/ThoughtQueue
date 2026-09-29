@@ -14,7 +14,7 @@ You're reading something, debugging code, or thinking out loud and want to jot i
 - **Quick capture** -- one shortcut saves instantly, no interruption
 - **Detailed capture** -- a second shortcut opens the note editor pre-filled with the selection so you can adjust it before saving
 - **Add note** -- write a note from scratch via the `+ Add` button in the menu bar popover, or start a checkbox list with `+ List`
-- **Note editor** -- a single window per note with a view/edit toggle: markdown renders by default, click or start typing to edit the raw text, with autosave and full undo/redo (Cmd+Z / Cmd+Shift+Z)
+- **Note editor** -- a single window per note with a view/edit toggle: markdown renders by default, click or start typing to edit the raw text, with autosave and full undo/redo (Cmd+Z / Cmd+Shift+Z). Pressing Return at the end of a list item continues the list (`1. ` becomes `2. `, bullets and `- [ ]` tasks repeat), and Return on an empty item ends it
 - **Checklists** -- a note whose lines are all `- [ ]` items opens as a real checkbox list rather than a markdown document: every box is always clickable, each item is its own field, and there is no edit mode to enter or leave. Start one with `+ List` in the popover. It is still a plain `.md` file using standard task syntax, so it renders as a checklist on GitHub too
 - **Navigation panel** -- the note window has a collapsible panel on the left listing every note grouped by category, with a search field. Hidden by default; the sidebar button in the header (or Ctrl+Cmd+S) reveals it, and picking a note switches the window over to it
 - **Copy, don't just open** -- one click to copy a note's full body or its file path straight to the clipboard, right from its row

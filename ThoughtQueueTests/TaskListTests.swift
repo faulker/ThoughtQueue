@@ -117,9 +117,25 @@ final class TaskListTests: XCTestCase {
         XCTAssertEqual(TaskList.returnAction(for: "- [ ]"), .clearMarker)
     }
 
-    func testReturnPassesThroughOnProseAndPlainBullets() {
+    func testReturnContinuesAnOrderedListWithTheNextNumber() {
+        XCTAssertEqual(TaskList.returnAction(for: "1. first"), .continueList(prefix: "2. "))
+        XCTAssertEqual(TaskList.returnAction(for: "  9) ninth"), .continueList(prefix: "  10) "))
+    }
+
+    func testReturnContinuesAPlainBulletList() {
+        XCTAssertEqual(TaskList.returnAction(for: "- bullet"), .continueList(prefix: "- "))
+        XCTAssertEqual(TaskList.returnAction(for: "\t*  item"), .continueList(prefix: "\t*  "))
+    }
+
+    func testReturnOnAnEmptyOrderedOrBulletItemClearsTheMarker() {
+        XCTAssertEqual(TaskList.returnAction(for: "3. "), .clearMarker)
+        XCTAssertEqual(TaskList.returnAction(for: "- "), .clearMarker)
+    }
+
+    func testReturnPassesThroughOnProse() {
         XCTAssertEqual(TaskList.returnAction(for: "prose"), .pass)
-        XCTAssertEqual(TaskList.returnAction(for: "- bullet"), .pass)
+        XCTAssertEqual(TaskList.returnAction(for: "1.5 is a number"), .pass)
+        XCTAssertEqual(TaskList.returnAction(for: "-no space"), .pass)
         XCTAssertEqual(TaskList.returnAction(for: ""), .pass)
     }
 

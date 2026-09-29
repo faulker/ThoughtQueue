@@ -117,6 +117,33 @@ final class TaskToggleTests: XCTestCase {
         XCTAssertEqual(vc.textView.string, "notes\n- [ ] one\n")
     }
 
+    func testReturnContinuesANumberedList() throws {
+        let (vc, _) = try makeEditor(body: "notes\n1. first", startInEditMode: true)
+        vc.textView.setSelectedRange(NSRange(location: (vc.textView.string as NSString).length, length: 0))
+
+        XCTAssertTrue(vc.continueTaskList())
+
+        XCTAssertEqual(vc.textView.string, "notes\n1. first\n2. ")
+    }
+
+    func testReturnOnAnEmptyNumberedItemEndsTheList() throws {
+        let (vc, _) = try makeEditor(body: "1. first\n2. ", startInEditMode: true)
+        vc.textView.setSelectedRange(NSRange(location: (vc.textView.string as NSString).length, length: 0))
+
+        XCTAssertTrue(vc.continueTaskList())
+
+        XCTAssertEqual(vc.textView.string, "1. first\n")
+    }
+
+    func testReturnContinuesABulletList() throws {
+        let (vc, _) = try makeEditor(body: "- one", startInEditMode: true)
+        vc.textView.setSelectedRange(NSRange(location: (vc.textView.string as NSString).length, length: 0))
+
+        XCTAssertTrue(vc.continueTaskList())
+
+        XCTAssertEqual(vc.textView.string, "- one\n- ")
+    }
+
     func testReturnOnProseIsNotHandled() throws {
         let (vc, _) = try makeEditor(body: "just prose", startInEditMode: true)
         vc.textView.setSelectedRange(NSRange(location: (vc.textView.string as NSString).length, length: 0))

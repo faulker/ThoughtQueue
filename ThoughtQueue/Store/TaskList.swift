@@ -140,12 +140,41 @@ enum TaskList {
     // MARK: - Typing
 
     /// What Return should do when pressed at the end of `line`.
-    /// A continued item always starts unchecked, and keeps the original bullet and indentation.
+    /// Task items, plain bullets (`- `, `* `, `+ `), and ordered items (`1. ` / `1) `) all
+    /// continue with their indentation and spacing kept. A continued task always starts
+    /// unchecked, and an ordered item's number is incremented. An empty item ends the list.
     static func returnAction(for line: String) -> ReturnAction {
-        guard let task = parse(line) else { return .pass }
-        if task.text.trimmingCharacters(in: .whitespaces).isEmpty { return .clearMarker }
-        return .continueList(prefix: task.indent + String(task.bullet) + task.spacing + "[ ] ")
+        if let task = parse(line) {
+            if task.text.trimmingCharacters(in: .whitespaces).isEmpty { return .clearMarker }
+            return .continueList(prefix: task.indent + String(task.bullet) + task.spacing + "[ ] ")
+        }
+        let ns = line as NSString
+        let whole = NSRange(location: 0, length: ns.length)
+        if let match = orderedRegex?.firstMatch(in: line, range: whole),
+           let number = Int(ns.substring(with: match.range(at: 2))) {
+            if ns.substring(with: match.range(at: 5)).trimmingCharacters(in: .whitespaces).isEmpty {
+                return .clearMarker
+            }
+            return .continueList(prefix: ns.substring(with: match.range(at: 1)) + String(number + 1)
+                + ns.substring(with: match.range(at: 3)) + ns.substring(with: match.range(at: 4)))
+        }
+        if let match = listBulletRegex?.firstMatch(in: line, range: whole) {
+            if ns.substring(with: match.range(at: 4)).trimmingCharacters(in: .whitespaces).isEmpty {
+                return .clearMarker
+            }
+            return .continueList(prefix: ns.substring(with: match.range(at: 1))
+                + ns.substring(with: match.range(at: 2)) + ns.substring(with: match.range(at: 3)))
+        }
+        return .pass
     }
+
+    /// An ordered list item. Group 1 indent, 2 number, 3 delimiter, 4 spacing, 5 content.
+    private static let orderedRegex = try? NSRegularExpression(
+        pattern: #"^([ \t]*)(\d{1,9})([.)])([ \t]+)(.*)$"#)
+
+    /// A plain bullet item. Group 1 indent, 2 bullet, 3 spacing, 4 content.
+    private static let listBulletRegex = try? NSRegularExpression(
+        pattern: #"^([ \t]*)([-*+])([ \t]+)(.*)$"#)
 
     // MARK: - Classification
 
