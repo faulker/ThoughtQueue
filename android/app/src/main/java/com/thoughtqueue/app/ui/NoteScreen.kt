@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Visibility
@@ -47,7 +48,6 @@ import com.thoughtqueue.app.TqApp
 import com.thoughtqueue.app.prefs.EditMode
 import com.thoughtqueue.app.store.Note
 import com.thoughtqueue.app.store.NoteDocType
-import com.thoughtqueue.app.store.NoteMetadataStore
 import com.thoughtqueue.app.store.NoteStore
 import com.thoughtqueue.app.store.TaskList
 import com.thoughtqueue.app.ui.theme.LocalPalette
@@ -62,7 +62,7 @@ private const val AUTOSAVE_DELAY_MS = 600L
  * message when the file is gone.
  */
 @Composable
-fun NoteScreen(app: TqApp, path: String, onBack: () -> Unit, onNavigator: () -> Unit) {
+fun NoteScreen(app: TqApp, path: String, onBack: () -> Unit, onNotesList: () -> Unit, onHome: () -> Unit) {
     val initial = remember(path) { Note.from(File(app.store.root, path), app.store.root) }
     if (initial == null) {
         Scaffold { padding ->
@@ -72,7 +72,7 @@ fun NoteScreen(app: TqApp, path: String, onBack: () -> Unit, onNavigator: () -> 
             }
         }
     } else {
-        NoteEditor(app, initial, onBack, onNavigator)
+        NoteEditor(app, initial, onBack, onNotesList, onHome)
     }
 }
 
@@ -82,7 +82,13 @@ fun NoteScreen(app: TqApp, path: String, onBack: () -> Unit, onNavigator: () -> 
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NoteEditor(app: TqApp, initial: Note, onBack: () -> Unit, onNavigator: () -> Unit) {
+private fun NoteEditor(
+    app: TqApp,
+    initial: Note,
+    onBack: () -> Unit,
+    onNotesList: () -> Unit,
+    onHome: () -> Unit,
+) {
     val store = app.store
     val palette = LocalPalette.current
     val defaultMode by app.prefs.editMode.collectAsState()
@@ -99,7 +105,6 @@ private fun NoteEditor(app: TqApp, initial: Note, onBack: () -> Unit, onNavigato
     var creatingCategory by remember { mutableStateOf(false) }
 
     val docType = remember(note, version) { store.docType(note) }
-    val isWorking = remember(note, version) { store.workingDocumentPath == NoteMetadataStore.key(note.file, store.root) }
     val categories = storeQuery(store, emptyList()) { categories() }
     val body = field.text
 
@@ -168,7 +173,8 @@ private fun NoteEditor(app: TqApp, initial: Note, onBack: () -> Unit, onNavigato
                     )
                 },
                 actions = {
-                    IconButton(onClick = onNavigator) { Icon(Icons.Default.Menu, "Navigator") }
+                    IconButton(onClick = onHome) { Icon(Icons.Default.Home, "Recent notes") }
+                    IconButton(onClick = onNotesList) { Icon(Icons.Default.Menu, "Notes by category") }
                     if (docType == NoteDocType.MARKDOWN) {
                         IconButton(onClick = { raw = !raw }) {
                             Icon(if (raw) Icons.Default.Visibility else Icons.Default.Edit, if (raw) "Rendered view" else "Edit raw")
@@ -189,13 +195,6 @@ private fun NoteEditor(app: TqApp, initial: Note, onBack: () -> Unit, onNavigato
                                 store.setDocType(NoteDocType.CHECKLIST, note)
                             })
                         }
-                        DropdownMenuItem(
-                            text = { Text(if (isWorking) "Unset working document" else "Set as working document") },
-                            onClick = {
-                                menuOpen = false
-                                store.setWorkingDocument(if (isWorking) null else note)
-                            },
-                        )
                     }
                 },
             )

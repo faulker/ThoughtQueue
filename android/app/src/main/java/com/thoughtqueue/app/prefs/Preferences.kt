@@ -2,7 +2,6 @@ package com.thoughtqueue.app.prefs
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.thoughtqueue.app.store.WorkingDocumentRef
 import com.thoughtqueue.app.sync.S3Config
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -68,7 +67,7 @@ data class SyncSettings(
  * SharedPreferences-backed app settings. Values the UI needs to react to are mirrored in
  * [StateFlow]s so Compose can collect them.
  */
-class Preferences(context: Context) : WorkingDocumentRef {
+class Preferences(context: Context) {
     private val sp: SharedPreferences =
         context.getSharedPreferences("thoughtqueue", Context.MODE_PRIVATE)
 
@@ -168,15 +167,6 @@ class Preferences(context: Context) : WorkingDocumentRef {
         _editMode.value = mode
     }
 
-    /** The working document as a store-relative path, or null. */
-    override var relativePath: String?
-        get() = sp.getString(KEY_WORKING_DOC, null)
-        set(value) {
-            sp.edit().apply {
-                if (value == null) remove(KEY_WORKING_DOC) else putString(KEY_WORKING_DOC, value)
-            }.apply()
-        }
-
     /** Reads an enum preference, falling back to [default] for a missing or unknown value. */
     private inline fun <reified T : Enum<T>> readEnum(key: String, default: T): T =
         sp.getString(key, null)?.let { name -> enumValues<T>().firstOrNull { it.name == name } } ?: default
@@ -186,7 +176,6 @@ class Preferences(context: Context) : WorkingDocumentRef {
         const val KEY_LIGHT_THEME = "lightThemeId"
         const val KEY_DARK_THEME = "darkThemeId"
         const val KEY_EDIT_MODE = "noteEditMode"
-        const val KEY_WORKING_DOC = "workingDocument"
         const val KEY_STORAGE_MODE = "storageMode"
         const val KEY_S3_ENDPOINT = "s3Endpoint"
         const val KEY_S3_REGION = "s3Region"

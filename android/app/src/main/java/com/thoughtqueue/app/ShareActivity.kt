@@ -8,8 +8,8 @@ import com.thoughtqueue.app.store.CaptureResult
 import com.thoughtqueue.app.store.persistCapture
 
 /**
- * Receives ACTION_SEND text/plain and saves it through [persistCapture]: appended to the working
- * document when one is set, otherwise a new note in Uncategorized. Shows a toast and finishes.
+ * Receives ACTION_SEND text/plain and saves it through [persistCapture] as a new note in
+ * Uncategorized. Shows a toast and finishes.
  */
 class ShareActivity : Activity() {
 
@@ -21,9 +21,8 @@ class ShareActivity : Activity() {
         val message = if (text == null) {
             "Nothing to save"
         } else {
-            when (val result = persistCapture((application as TqApp).store, text)) {
+            when (persistCapture((application as TqApp).store, text)) {
                 CaptureResult.Empty -> "No text to save"
-                is CaptureResult.Appended -> "Appended to ${result.title}"
                 is CaptureResult.Created -> "Captured!"
                 CaptureResult.Failed -> "Failed to save"
             }

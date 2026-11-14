@@ -61,7 +61,7 @@ class TqApp : Application() {
         prefs = Preferences(this)
         themes = ThemeLibrary(File(filesDir, "themes")).also { it.reload() }
         secrets = EncryptedSecretStore(this)
-        storeState = MutableStateFlow(NoteStore(prefs.storageMode.value.storeRoot(filesDir), prefs))
+        storeState = MutableStateFlow(NoteStore(prefs.storageMode.value.storeRoot(filesDir)))
         sync = SyncEngine(
             scope = appScope,
             contextProvider = ::syncContext,
@@ -111,7 +111,7 @@ class TqApp : Application() {
                     log.severe("Seeding the S3 cache failed: ${e.message}")
                 }
             }
-            storeState.value = NoteStore(newRoot, prefs)
+            storeState.value = NoteStore(newRoot)
         }
         refreshSyncState()
     }

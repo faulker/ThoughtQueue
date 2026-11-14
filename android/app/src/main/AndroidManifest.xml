@@ -26,7 +26,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Share target: saves shared text as a note or appends it to the working document. -->
+        <!-- Share target: saves shared text as a new note. -->
         <activity
             android:name=".ShareActivity"
             android:exported="true"

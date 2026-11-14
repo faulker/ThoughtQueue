@@ -12,14 +12,6 @@ import java.util.Locale
 import java.util.UUID
 import java.util.logging.Logger
 
-/** Where the working document's store-relative path is remembered (preferences in the app, memory in tests). */
-interface WorkingDocumentRef {
-    var relativePath: String?
-}
-
-/** A [WorkingDocumentRef] that only lives in memory. */
-class InMemoryWorkingDocument(override var relativePath: String? = null) : WorkingDocumentRef
-
 /**
  * Filesystem-backed note store. The store folder is the single source of truth: notes are plain
  * `.md` files, categories are immediate subfolders, dates are file attributes. Document type and
@@ -28,10 +20,7 @@ class InMemoryWorkingDocument(override var relativePath: String? = null) : Worki
  * [changes] is the `.notesDidChange` equivalent: a counter that increments after every write, so
  * UI can re-query by collecting it.
  */
-class NoteStore(
-    root: File,
-    private val workingDocument: WorkingDocumentRef = InMemoryWorkingDocument(),
-) {
+class NoteStore(root: File) {
     val root: File = root.absoluteFile
     val metadata = NoteMetadataStore(this.root)
     private val log = Logger.getLogger("NoteStore")
@@ -52,30 +41,6 @@ class NoteStore(
      * recognize its own announcement so it does not trigger itself.
      */
     fun postChange(): Int = version.updateAndGet { it + 1 }
-
-    // MARK: Working document
-
-    /** The note designated as the working document, or null when unset or its file is gone. */
-    fun workingDocumentNote(): Note? {
-        val rel = workingDocument.relativePath ?: return null
-        val file = File(root, rel)
-        if (!file.exists()) return null
-        return Note.from(file, root)
-    }
-
-    /** Store-relative path of the working document, even if its file is missing. */
-    val workingDocumentPath: String? get() = workingDocument.relativePath
-
-    /** Designate [note] as the working document, or clear it with null. */
-    fun setWorkingDocument(note: Note?) {
-        workingDocument.relativePath = note?.let { NoteMetadataStore.key(it.file, root) }
-        postChange()
-    }
-
-    /** Clear a stale working document setting without announcing a note change. */
-    fun clearWorkingDocument() {
-        workingDocument.relativePath = null
-    }
 
     // MARK: Reads
 
@@ -106,6 +71,16 @@ class NoteStore(
 
     /** Notes the list shows: everything except those in archived folders. */
     fun visibleNotes(): List<Note> = allNotes().filter { !isArchived(it.category) }
+
+    /**
+     * Visible notes grouped for the main list: active folders A to Z, then Uncategorized (null).
+     * Archived folders and empty groups are left out; each group stays newest first.
+     */
+    fun visibleGroups(): List<Pair<String?, List<Note>>> {
+        val byCategory = visibleNotes().groupBy { it.category }
+        val order = categories().filter { !isArchived(it) } + listOf<String?>(null)
+        return order.mapNotNull { category -> byCategory[category]?.let { category to it } }
+    }
 
     /** Notes in a category. Pass null for Uncategorized (root-level notes only). */
     fun notes(category: String?): List<Note> = allNotes().filter { it.category == category }
@@ -385,7 +360,7 @@ class NoteStore(
 
     /**
      * Rename a category folder. Fails when either name sanitizes away, the source is missing or
-     * the destination exists. Remaps metadata keys and the working document when it lived under it.
+     * the destination exists. Remaps metadata keys under it.
      */
     fun renameCategory(oldName: String, newName: String): Boolean {
         val oldSafe = sanitizeCategory(oldName) ?: return false
@@ -408,18 +383,13 @@ class NoteStore(
             return false
         }
         metadata.moveFolder(oldFolder, newFolder)
-        workingDocument.relativePath?.let { rel ->
-            if (rel == oldSafe || rel.startsWith("$oldSafe/")) {
-                workingDocument.relativePath = newSafe + rel.substring(oldSafe.length)
-            }
-        }
         postChange()
         return true
     }
 
     /**
      * Delete a category folder. Its notes move to Uncategorized first so nothing is lost; the
-     * folder is then removed along with its metadata. The working document follows a moved note.
+     * folder is then removed along with its metadata.
      */
     fun deleteCategory(name: String): Boolean {
         val safe = sanitizeCategory(name) ?: return false
@@ -430,7 +400,6 @@ class NoteStore(
         }
         for (note in notes(safe)) {
             val dest = uniqueFile(note.file.nameWithoutExtension, root)
-            val oldKey = NoteMetadataStore.key(note.file, root)
             try {
                 java.nio.file.Files.move(note.file.toPath(), dest.toPath())
             } catch (e: IOException) {
@@ -439,9 +408,6 @@ class NoteStore(
                 return false
             }
             metadata.move(note.file, dest)
-            if (oldKey != null && workingDocument.relativePath == oldKey) {
-                workingDocument.relativePath = NoteMetadataStore.key(dest, root)
-            }
         }
         if (!folder.deleteRecursively()) {
             log.severe("deleteCategory remove failed: ${folder.path}")

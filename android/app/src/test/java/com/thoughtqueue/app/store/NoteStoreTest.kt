@@ -11,16 +11,14 @@ import org.junit.Test
 import java.io.File
 import java.nio.file.Files
 
-/** Store behavior: creation, naming, metadata remapping, archive visibility, working document, capture. */
+/** Store behavior: creation, naming, metadata remapping, archive visibility, capture. */
 class NoteStoreTest {
     private lateinit var root: File
-    private lateinit var working: InMemoryWorkingDocument
     private lateinit var store: NoteStore
 
     @Before fun setUp() {
         root = Files.createTempDirectory("tq-store").toFile()
-        working = InMemoryWorkingDocument()
-        store = NoteStore(root, working)
+        store = NoteStore(root)
     }
 
     @After fun tearDown() {
@@ -216,6 +214,20 @@ class NoteStoreTest {
         assertEquals(listOf("Beta", "Zed", null, "Alpha"), store.navigatorCategories())
     }
 
+    @Test fun visibleGroupsOrderCategoriesThenUncategorizedAndSkipArchivedAndEmpty() {
+        val older = create("older", cat = "beta")
+        older.file.setLastModified(1_000_000)
+        create("newer", cat = "beta")
+        create("loose")
+        create("hidden", cat = "Alpha")
+        store.setArchived(true, "Alpha")
+        store.createCategory("Empty")
+        val groups = store.visibleGroups()
+        assertEquals(listOf("beta", null), groups.map { it.first })
+        assertEquals(listOf("newer", "older"), groups[0].second.map { it.title })
+        assertEquals(listOf("loose"), groups[1].second.map { it.title })
+    }
+
     @Test fun renamingAnArchivedCategoryKeepsTheFlag() {
         create("a", cat = "Old")
         store.setArchived(true, "Old")
@@ -264,22 +276,7 @@ class NoteStoreTest {
         assertTrue(store.changes.value > before)
     }
 
-    // MARK: working document and capture
-
-    @Test fun renameCategoryRemapsWorkingDocument() {
-        val n = create("a", cat = "Old")
-        store.setWorkingDocument(n)
-        store.renameCategory("Old", "New")
-        assertEquals("New/a.md", working.relativePath)
-        assertNotNull(store.workingDocumentNote())
-    }
-
-    @Test fun deleteCategoryRemapsWorkingDocument() {
-        val n = create("a", cat = "Old")
-        store.setWorkingDocument(n)
-        store.deleteCategory("Old")
-        assertEquals("a.md", working.relativePath)
-    }
+    // MARK: capture
 
     @Test fun captureCreatesMarkdownNoteInUncategorized() {
         val result = persistCapture(store, "shared text")
@@ -289,20 +286,11 @@ class NoteStoreTest {
         assertEquals(NoteDocType.MARKDOWN, store.docType(note))
     }
 
-    @Test fun captureAppendsToWorkingDocument() {
-        val doc = create("log", "first")
-        store.setWorkingDocument(doc)
-        assertEquals(CaptureResult.Appended("log"), persistCapture(store, "second"))
-        assertEquals("first\n\nsecond", store.body(doc))
-        assertEquals(1, store.allNotes().size)
-    }
-
-    @Test fun captureWithMissingWorkingDocumentClearsItAndCreates() {
-        val doc = create("log")
-        store.setWorkingDocument(doc)
-        doc.file.delete()
-        assertTrue(persistCapture(store, "text") is CaptureResult.Created)
-        assertNull(working.relativePath)
+    @Test fun captureAlwaysCreatesANewNote() {
+        val existing = create("log", "first")
+        assertTrue(persistCapture(store, "second") is CaptureResult.Created)
+        assertEquals("first", store.body(existing))
+        assertEquals(2, store.allNotes().size)
     }
 
     @Test fun captureIgnoresBlankText() {
