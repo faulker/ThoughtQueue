@@ -106,11 +106,98 @@ jobs:
           git tag "$NEW_TAG"
           git push origin "$NEW_TAG"
 
+  # Builds the Android APK/AAB for the same version and hands them to the release
+  # job as a workflow artifact, so both platforms ship in one GitHub release.
+  android:
+    name: Build Android
+    runs-on: ubuntu-latest
+    needs: [resolve-version]
+    if: always() && (needs.resolve-version.result == 'success' || needs.resolve-version.result == 'skipped')
+    env:
+      RELEASE_TAG: ${{ needs.resolve-version.outputs.new_tag || github.ref_name }}
+    outputs:
+      signed: ${{ steps.keystore.outputs.signed }}
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-version.outputs.new_tag || github.ref_name }}
+
+      - name: Set version from tag
+        run: echo "VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+
+      - name: Run unit tests
+        if: ${{ github.event.inputs.skip_tests != 'true' }}
+        run: ./gradlew testDebugUnitTest
+
+      # Signing is optional: without ANDROID_KEYSTORE_BASE64 the release APK is built
+      # unsigned (the AAB is unsigned too), and the release notes say so.
+      - name: Decode keystore
+        id: keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -e
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "No ANDROID_KEYSTORE_BASE64 secret, building unsigned."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build release APK and AAB
+        env:
+          TQ_ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.signed == 'true' && format('{0}/release.jks', runner.temp) || '' }}
+          TQ_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          TQ_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          TQ_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease bundleRelease \
+            -PversionName="$VERSION" \
+            -PversionCode="${{ github.run_number }}"
+
+      - name: Package artifacts
+        env:
+          SIGNED: ${{ steps.keystore.outputs.signed }}
+        run: |
+          set -e
+          mkdir -p dist
+          if [ "$SIGNED" = "true" ]; then
+            cp app/build/outputs/apk/release/app-release.apk "dist/ThoughtQueue-${VERSION}.apk"
+          else
+            cp app/build/outputs/apk/release/app-release-unsigned.apk "dist/ThoughtQueue-${VERSION}-unsigned.apk"
+          fi
+          cp app/build/outputs/bundle/release/app-release.aab "dist/ThoughtQueue-${VERSION}.aab"
+          ls -lh dist
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-dist
+          path: android/dist/*
+          if-no-files-found: error
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+
   release:
     name: Build & Release
     runs-on: macos-latest
-    needs: [resolve-version]
-    if: always() && (needs.resolve-version.result == 'success' || needs.resolve-version.result == 'skipped')
+    needs: [resolve-version, android]
+    if: always() && (needs.resolve-version.result == 'success' || needs.resolve-version.result == 'skipped') && needs.android.result == 'success'
     env:
       RELEASE_TAG: ${{ needs.resolve-version.outputs.new_tag || github.ref_name }}
       BUILD_DIR: build
@@ -313,6 +400,13 @@ jobs:
           rm -f "$KEY"
           xcrun stapler staple "$DMG"
 
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-dist
+          path: dist
+
+      # One checksums file covers every asset; UpdateService looks up the zip by name.
       - name: Generate checksums
         run: |
           cd dist
@@ -322,14 +416,25 @@ jobs:
       - name: Compose release notes header
         env:
           NOTARIZED: ${{ steps.signing.outputs.notarize }}
+          ANDROID_SIGNED: ${{ needs.android.outputs.signed }}
         run: |
           {
-            echo "**ThoughtQueue ${VERSION}** for macOS 14+ (universal: Apple Silicon + Intel)."
+            echo "**ThoughtQueue ${VERSION}** for macOS 14+ (universal: Apple Silicon + Intel) and Android 8.0+ (API 26)."
+            echo
+            echo "### macOS"
             echo
             echo "Install: open the DMG and drag ThoughtQueue to Applications, then grant Accessibility permission in System Settings > Privacy & Security > Accessibility."
             if [ "$NOTARIZED" != "true" ]; then
               echo
               echo "> This build is not notarized. macOS will block it on first launch: right-click the app and choose Open, or run \`xattr -dr com.apple.quarantine /Applications/ThoughtQueue.app\`."
+            fi
+            echo
+            echo "### Android"
+            echo
+            echo "Install the APK directly, or upload the AAB to Play Console."
+            if [ "$ANDROID_SIGNED" != "true" ]; then
+              echo
+              echo "> This Android build is not signed with a release key, so the APK will not install until it is signed."
             fi
           } > release-notes.md
           cat release-notes.md

@@ -123,7 +123,7 @@ To keep ThoughtQueue available, drag `ThoughtQueue.app` to your Applications fol
 
 ## Releasing
 
-`.github/workflows/release.yml` builds a universal (arm64 + x86_64) app on a macOS runner, runs the test suite, signs and notarizes it when the Apple secrets are present, then publishes a GitHub Release with a `.dmg`, a `.zip`, and `checksums-sha256.txt`.
+`.github/workflows/release.yml` builds a universal (arm64 + x86_64) app on a macOS runner, runs the test suite, signs and notarizes it when the Apple secrets are present, then publishes a GitHub Release with a `.dmg`, a `.zip`, and `checksums-sha256.txt`. A parallel job builds the Android APK and AAB for the same version and they're attached to that same release (details and Android signing secrets in [`android/README.md`](android/README.md#releasing)).
 
 Two ways to trigger it:
 
@@ -142,6 +142,7 @@ All of these are optional. With none of them set you still get a release, just a
 | `APPLE_NOTARY_KEY` | App Store Connect API key as a base64-encoded `.p8`, enables notarization |
 | `APPLE_NOTARY_KEY_ID` | 10-character Key ID for that API key |
 | `APPLE_NOTARY_ISSUER_ID` | Issuer ID (UUID) for that API key |
+| `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | Signs the Android APK; without them it's released unsigned |
 | `RELEASE_PAT` | Only needed if branch protection blocks the default token from pushing the version-bump commit |
 
 Signing needs `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PASSWORD`, and `APPLE_TEAM_ID`. Notarization additionally needs `APPLE_NOTARY_KEY`, `APPLE_NOTARY_KEY_ID`, and `APPLE_NOTARY_ISSUER_ID`.

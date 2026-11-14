@@ -151,6 +151,14 @@ class NoteStoreTest {
         assertTrue(MetadataFile.decode(File(root, ".thoughtqueue/metadata.json").readText()).notes.isEmpty())
     }
 
+    /** The note screen saves on dispose after an in-note delete; that save must not resurrect the file. */
+    @Test fun saveAfterDeleteDoesNotRecreateTheNote() {
+        val n = create("a", body = "hello")
+        assertTrue(store.delete(n))
+        assertFalse(store.updateBody(n, "unsaved edit"))
+        assertFalse(n.file.exists())
+    }
+
     @Test fun renamingACategoryReKeysItsNotes() {
         val n = create("a", cat = "Old", type = NoteDocType.CHECKLIST)
         assertTrue(store.renameCategory("Old", "New"))

@@ -83,11 +83,12 @@ Optional: `TQ_S3_REGION` (default `us-east-1`), `TQ_S3_PATH_STYLE=false` for vir
 
 ## Releasing
 
-Push a tag like `android-v1.2.3` (or run the "Android Release" workflow manually with `1.2.3`).
-`.github/workflows/android-release.yml` runs the unit tests, builds a minified release APK and AAB,
-and creates a GitHub release with `ThoughtQueue-<version>.apk`, `ThoughtQueue-<version>.aab` and
-`checksums-sha256.txt`. versionName is the tag without `android-v`, versionCode is the run number.
-The `android-v*` tags never match the desktop workflow's `v*` trigger.
+The Android app ships in the same GitHub release as the macOS app. `.github/workflows/release.yml`
+(tag push `v*` or a manual run with a version bump, see the root README) has an `android` job that runs
+the unit tests and builds a minified release APK and AAB. The release job then attaches
+`ThoughtQueue-<version>.apk` and `ThoughtQueue-<version>.aab` next to the macOS DMG and zip, all covered
+by one `checksums-sha256.txt`. versionName is the tag without `v`, versionCode is the run number.
+If the Android build fails, nothing is released.
 
 Upload the `.aab` to Play Console, not the APK.
 

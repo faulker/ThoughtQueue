@@ -1,5 +1,6 @@
 package com.thoughtqueue.app.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -103,6 +106,8 @@ private fun NoteEditor(
     var raw by rememberSaveable { mutableStateOf(diskBody.isEmpty() || defaultMode == EditMode.RAW) }
     var menuOpen by remember { mutableStateOf(false) }
     var creatingCategory by remember { mutableStateOf(false) }
+    var confirmingDelete by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     val docType = remember(note, version) { store.docType(note) }
     val categories = storeQuery(store, emptyList()) { categories() }
@@ -156,6 +161,26 @@ private fun NoteEditor(
         store.move(note, category)?.let { note = it }
     }
 
+    /** Delete the note and leave the screen. The dispose-time save is a no-op once the file is gone. */
+    fun deleteNote() {
+        confirmingDelete = false
+        if (store.delete(note)) onBack() else Toast.makeText(context, "Could not delete", Toast.LENGTH_SHORT).show()
+    }
+
+    if (confirmingDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmingDelete = false },
+            title = { Text("Delete note?") },
+            text = { Text("\"${note.title}\" will be permanently deleted.") },
+            confirmButton = {
+                TextButton(onClick = ::deleteNote) { Text("Delete", color = palette.danger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingDelete = false }) { Text("Cancel") }
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -195,6 +220,10 @@ private fun NoteEditor(
                                 store.setDocType(NoteDocType.CHECKLIST, note)
                             })
                         }
+                        DropdownMenuItem(text = { Text("Delete note", color = palette.danger) }, onClick = {
+                            menuOpen = false
+                            confirmingDelete = true
+                        })
                     }
                 },
             )

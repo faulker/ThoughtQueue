@@ -20,7 +20,7 @@ open ThoughtQueue.xcodeproj
 
 After adding or removing Swift source files, re-run `xcodegen generate` to update the xcodeproj.
 
-Releases are built by `.github/workflows/release.yml` (tag push `v*` or manual run with a version bump). The version lives in `ThoughtQueue/Info.plist`; the workflow overwrites it from the tag. See the Releasing section of `README.md` for the secrets it uses.
+Releases (macOS and Android together, one GitHub release) are built by `.github/workflows/release.yml` (tag push `v*` or manual run with a version bump). The version lives in `ThoughtQueue/Info.plist`; the workflow overwrites it from the tag. See the Releasing section of `README.md` for the secrets it uses.
 
 ## Architecture
 
