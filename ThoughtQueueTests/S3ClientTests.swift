@@ -92,6 +92,20 @@ final class S3ClientTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "x-amz-content-sha256"), SigV4.sha256Hex(body))
     }
 
+    /// A proxy that gzips the body (Cloudflare) serves a weak ETag; it must match the LIST ETag.
+    func testGetNormalizesWeakETag() async throws {
+        StubURLProtocol.handler = { _ in (200, ["ETag": "W/\"abc123\""], Data("x".utf8)) }
+        let content = try await client.get(key: "a.md")
+        XCTAssertEqual(content.etag, "abc123")
+    }
+
+    /// Strong, weak, padded and bare ETags all normalize to the same value.
+    func testStripQuotesHandlesWeakAndStrongETags() {
+        for raw in ["\"abc\"", "W/\"abc\"", "w/\"abc\"", " W/\"abc\" ", "abc"] {
+            XCTAssertEqual(S3Client.stripQuotes(raw), "abc", raw)
+        }
+    }
+
     func testGetSurfacesServiceError() async {
         StubURLProtocol.handler = { _ in
             (404, [:], Data("<Error><Code>NoSuchKey</Code><Message>gone</Message></Error>".utf8))

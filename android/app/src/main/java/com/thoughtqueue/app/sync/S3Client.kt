@@ -186,8 +186,18 @@ class S3Client(
             return ListPage(objects, collector.isTruncated == "true", token)
         }
 
-        /** Removes surrounding double quotes and spaces (S3 returns ETags as `"abc"`). */
-        fun stripQuotes(value: String): String = value.trim { it == '"' || it == ' ' || it == '\t' }
+        /**
+         * Normalizes an ETag to its bare value: drops a weak `W/` prefix and surrounding quotes
+         * and spaces. S3 returns `"abc"`, but a compressing proxy (Cloudflare gzips responses
+         * and `HttpURLConnection` asks for gzip by default) serves GETs as `W/"abc"`. Without
+         * this the GET ETag never matched the LIST ETag, so every downloaded note looked
+         * remotely changed and deleting it was planned as a conflict.
+         */
+        fun stripQuotes(value: String): String {
+            val trimmed = value.trim()
+            val unweak = if (trimmed.startsWith("W/", ignoreCase = true)) trimmed.substring(2) else trimmed
+            return unweak.trim { it == '"' || it == ' ' || it == '\t' }
+        }
 
         /** Parses S3's ISO 8601 timestamps, with or without fractional seconds; null when invalid. */
         fun parseISO8601(text: String): Instant? = try {

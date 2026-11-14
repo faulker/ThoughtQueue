@@ -132,6 +132,19 @@ class S3ClientTest {
         assertEquals("hello", String(req.body))
     }
 
+    /** A proxy that gzips the body (Cloudflare) serves a weak ETag; it must match the LIST ETag. */
+    @Test fun getNormalizesWeakETag() = runBlocking {
+        handler = { Triple(200, mapOf("ETag" to "W/\"abc123\""), "x".toByteArray()) }
+        assertEquals("abc123", client.get("a.md").etag)
+    }
+
+    /** Strong, weak, padded and bare ETags all normalize to the same value. */
+    @Test fun stripQuotesHandlesWeakAndStrongETags() {
+        for (raw in listOf("\"abc\"", "W/\"abc\"", "w/\"abc\"", " W/\"abc\" ", "abc")) {
+            assertEquals(raw, "abc", S3Client.stripQuotes(raw))
+        }
+    }
+
     @Test fun unicodeKeyIsSentEncodedAndSignatureHostMatches() = runBlocking {
         handler = { Triple(200, mapOf("ETag" to "\"e\""), "x".toByteArray()) }
         val got = client.get("Idées/café ☕.md")

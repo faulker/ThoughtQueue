@@ -196,9 +196,13 @@ final class S3Client: ObjectStore {
                         nextContinuationToken: token)
     }
 
-    /// Removes surrounding double quotes (S3 returns ETags as `"abc"`, sometimes as `&quot;abc&quot;`).
+    /// Normalizes an ETag to its bare value: drops a weak `W/` prefix and surrounding quotes.
+    /// S3 returns `"abc"` (sometimes `&quot;abc&quot;`), but a compressing proxy such as
+    /// Cloudflare serves gzipped GETs as `W/"abc"`, which must still match the LIST ETag.
     static func stripQuotes(_ value: String) -> String {
-        value.trimmingCharacters(in: CharacterSet(charactersIn: "\"").union(.whitespaces))
+        var trimmed = value.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("W/") || trimmed.hasPrefix("w/") { trimmed.removeFirst(2) }
+        return trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "\"").union(.whitespaces))
     }
 
     /// Parses S3's ISO 8601 timestamps, with or without fractional seconds.
