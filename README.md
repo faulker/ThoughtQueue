@@ -261,6 +261,28 @@ Update checks only run for installed or downloaded copies (for example under `/A
 
 Under **Preferences > Updates** you'll find the running version, a **Check Now** button, a toggle for automatic checks, and the interval (hourly, every 6 hours, daily, or weekly). If ThoughtQueue is installed somewhere you can't write to, it offers to open the release page instead so you can install it by hand.
 
+## Sync with S3
+
+Notes can sync to any S3-compatible bucket (AWS S3, [RustFS](https://github.com/rustfs/rustfs), [MinIO](https://min.io)). Open **Preferences > Sync** and fill in:
+
+- **Endpoint**, e.g. `http://localhost:9000` or `https://s3.us-east-1.amazonaws.com`
+- **Region** (blank means `us-east-1`), **Bucket**, and an optional **Prefix** folder
+- **Access key ID** and **Secret key** (the secret is stored in the Keychain)
+- **Path-style** addressing, on by default and required for RustFS and MinIO
+
+Storage modes: **Local** (no sync), **S3** (notes live in a hidden cache and sync to the bucket), **Both** (your folder syncs to the bucket). Sync runs at launch, after edits, on an interval, or on demand.
+
+If a note changed on both sides, nothing is overwritten. The remote copy is parked and a window asks you to keep local, keep remote, or keep both. Details are in [docs/sync.md](docs/sync.md).
+
+To run the integration tests against a real server (skipped by default):
+
+```bash
+TEST_RUNNER_TQ_S3_ENDPOINT=http://localhost:9000 \
+TEST_RUNNER_TQ_S3_BUCKET=thoughtqueue-test \
+TEST_RUNNER_TQ_S3_ACCESS_KEY=... TEST_RUNNER_TQ_S3_SECRET_KEY=... \
+xcodebuild -project ThoughtQueue.xcodeproj -scheme ThoughtQueueTests test -only-testing:ThoughtQueueTests/S3IntegrationTests
+```
+
 ## How it works
 
 ThoughtQueue uses macOS Accessibility APIs (`CGEventTap`) to listen for global hotkeys and simulate keyboard input. Text capture works by simulating Cmd+C, reading the pasteboard, then restoring it. "Open With" destinations either shell out via `Process` (command type) or activate the target app and simulate keystrokes to paste (app-input type) -- no API keys needed either way.

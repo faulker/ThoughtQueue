@@ -11,7 +11,7 @@ private final class ActionTrampoline: NSObject {
 
 /// Settings: store-location chooser, working document, click behavior, open-with editor,
 /// hotkeys, toast timeout, auto-intel toggle, update checks, start-at-login.
-final class PreferencesWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
+final class PreferencesWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
     static let shared = PreferencesWindowController()
 
     private let quickRecorder = ShortcutRecorderView()
@@ -41,6 +41,28 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     private let checkNowButton = NSButton(title: "Check Now", target: nil, action: nil)
     private let autoUpdateCheckbox = NSButton(checkboxWithTitle: "Automatically check for updates", target: nil, action: nil)
     private let updateIntervalPopup = NSPopUpButton()
+
+    private let chooseStoreButton = NSButton(title: "Choose\u{2026}", target: nil, action: nil)
+    private let storeNoteLabel = NSTextField(wrappingLabelWithString: "")
+    private let storageModePopup = NSPopUpButton()
+    private let endpointField = NSTextField()
+    private let regionField = NSTextField()
+    private let bucketField = NSTextField()
+    private let prefixField = NSTextField()
+    private let accessKeyField = NSTextField()
+    private let secretField = NSSecureTextField()
+    private let pathStyleCheckbox = NSButton(checkboxWithTitle: "Path-style addressing (RustFS, MinIO)", target: nil, action: nil)
+    private let testConnectionButton = NSButton(title: "Test Connection", target: nil, action: nil)
+    private let testResultLabel = NSTextField(wrappingLabelWithString: "")
+    private let syncOnChangeCheckbox = NSButton(checkboxWithTitle: "Sync after changes", target: nil, action: nil)
+    private let syncAtLaunchCheckbox = NSButton(checkboxWithTitle: "Sync at launch", target: nil, action: nil)
+    private let syncOnIntervalCheckbox = NSButton(checkboxWithTitle: "Sync every", target: nil, action: nil)
+    private let syncIntervalPopup = NSPopUpButton()
+    private let syncNowButton = NSButton(title: "Sync Now", target: nil, action: nil)
+    private let syncStatusLabel = NSTextField(wrappingLabelWithString: "")
+    /// Controls that only matter when S3 is in use; disabled in Local mode.
+    private var s3Controls: [NSControl] = []
+    private var syncStatusObserver: NSObjectProtocol?
 
     private var openWithActions: [OpenWithAction] = []
 
@@ -161,9 +183,16 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         storePathLabel.font = Theme.body(12)
         storePathLabel.textColor = Theme.textSecondary
         storePathLabel.lineBreakMode = .byTruncatingMiddle
-        let chooseBtn = NSButton(title: "Choose\u{2026}", target: self, action: #selector(chooseStore))
-        chooseBtn.bezelStyle = .rounded
-        stack.addArrangedSubview(row([storePathLabel, chooseBtn]))
+        chooseStoreButton.target = self
+        chooseStoreButton.action = #selector(chooseStore)
+        chooseStoreButton.bezelStyle = .rounded
+        stack.addArrangedSubview(row([storePathLabel, chooseStoreButton]))
+        storeNoteLabel.font = Theme.body(11.5)
+        storeNoteLabel.textColor = Theme.textSecondary
+        storeNoteLabel.stringValue = "Not used in S3 only mode: notes live in a hidden cache folder instead."
+        stack.addArrangedSubview(storeNoteLabel)
+
+        addSyncSection(to: stack)
 
         // Click behavior
         stack.addArrangedSubview(sectionLabel("When clicking a note"))
@@ -311,6 +340,203 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         stack.addArrangedSubview(startAtLoginCheckbox)
     }
 
+    // MARK: - Sync section
+
+    /// Storage modes in popup order, with their titles.
+    static let storageModeChoices: [(mode: StorageMode, title: String)] = [
+        (.local, "Local folder only"),
+        (.s3, "S3 only"),
+        (.both, "Local folder + S3"),
+    ]
+
+    /// Interval popup choices; the stored value is seconds.
+    static let syncIntervalChoices: [(title: String, seconds: TimeInterval)] = [
+        ("1 minute", 60), ("5 minutes", 300), ("15 minutes", 900), ("30 minutes", 1800), ("1 hour", 3600),
+    ]
+
+    /// Index of the choice closest to `seconds`, so an odd stored value still shows something sensible.
+    static func syncIntervalIndex(for seconds: TimeInterval) -> Int {
+        let distances = syncIntervalChoices.map { abs($0.seconds - seconds) }
+        return distances.firstIndex(of: distances.min() ?? 0) ?? 0
+    }
+
+    /// S3 connection and trigger controls apply to every mode but Local.
+    static func s3ControlsEnabled(for mode: StorageMode) -> Bool { mode != .local }
+
+    /// The Store Folder chooser is moot in S3 only mode, where the hidden cache is the root.
+    static func storeFolderEnabled(for mode: StorageMode) -> Bool { mode != .s3 }
+
+    /// The sync status line: the error, "Syncing\u{2026}", the last sync time, or "Not synced yet".
+    static func syncStatusText(status: SyncStatus, lastSync: Date?) -> String {
+        switch status {
+        case .syncing: return "Syncing\u{2026}"
+        case .error(let message): return message
+        case .idle:
+            guard let lastSync else { return "Not synced yet" }
+            let formatter = DateFormatter()
+            formatter.dateStyle = Calendar.current.isDateInToday(lastSync) ? .none : .short
+            formatter.timeStyle = .short
+            return "Last synced \(formatter.string(from: lastSync))"
+        }
+    }
+
+    /// Builds the Sync section: storage mode, S3 connection fields, test button, triggers, and status.
+    private func addSyncSection(to stack: NSStackView) {
+        let prefs = PreferencesManager.shared
+        stack.addArrangedSubview(sectionLabel("Sync"))
+
+        storageModePopup.addItems(withTitles: Self.storageModeChoices.map(\.title))
+        storageModePopup.selectItem(at: Self.storageModeChoices.firstIndex { $0.mode == prefs.storageMode } ?? 0)
+        storageModePopup.target = self
+        storageModePopup.action = #selector(storageModeChanged)
+        stack.addArrangedSubview(row([fixedLabel("Storage", 90), storageModePopup]))
+
+        let fields: [(String, NSTextField, String, String)] = [
+            ("Endpoint", endpointField, "https://s3.example.com", prefs.s3Endpoint),
+            ("Region", regionField, "us-east-1 (default)", prefs.s3Region),
+            ("Bucket", bucketField, "my-notes", prefs.s3Bucket),
+            ("Prefix", prefixField, "optional folder, e.g. notes/", prefs.s3Prefix),
+            ("Access key ID", accessKeyField, "", prefs.s3AccessKeyID),
+        ]
+        for (title, field, placeholder, value) in fields {
+            configure(field, placeholder: placeholder, value: value)
+            stack.addArrangedSubview(row([fixedLabel(title, 90), field]))
+        }
+        configure(secretField, placeholder: "", value: "")
+        refreshSecretPlaceholder()
+        stack.addArrangedSubview(row([fixedLabel("Secret key", 90), secretField]))
+
+        pathStyleCheckbox.state = prefs.s3UsePathStyle ? .on : .off
+        pathStyleCheckbox.target = self
+        pathStyleCheckbox.action = #selector(pathStyleToggled)
+        stack.addArrangedSubview(pathStyleCheckbox)
+
+        testConnectionButton.bezelStyle = .rounded
+        testConnectionButton.target = self
+        testConnectionButton.action = #selector(testConnection)
+        stack.addArrangedSubview(testConnectionButton)
+        testResultLabel.font = Theme.body(12)
+        testResultLabel.isHidden = true
+        testResultLabel.preferredMaxLayoutWidth = 470
+        stack.addArrangedSubview(testResultLabel)
+
+        syncOnChangeCheckbox.state = prefs.syncOnChange ? .on : .off
+        syncOnChangeCheckbox.action = #selector(syncTriggerToggled)
+        syncAtLaunchCheckbox.state = prefs.syncAtLaunch ? .on : .off
+        syncAtLaunchCheckbox.action = #selector(syncTriggerToggled)
+        syncOnIntervalCheckbox.state = prefs.syncOnInterval ? .on : .off
+        syncOnIntervalCheckbox.action = #selector(syncTriggerToggled)
+        for checkbox in [syncOnChangeCheckbox, syncAtLaunchCheckbox, syncOnIntervalCheckbox, pathStyleCheckbox] {
+            checkbox.font = Theme.body(12.5)
+            checkbox.target = self
+        }
+        stack.addArrangedSubview(syncOnChangeCheckbox)
+        stack.addArrangedSubview(syncAtLaunchCheckbox)
+        syncIntervalPopup.addItems(withTitles: Self.syncIntervalChoices.map(\.title))
+        syncIntervalPopup.selectItem(at: Self.syncIntervalIndex(for: prefs.syncInterval))
+        syncIntervalPopup.target = self
+        syncIntervalPopup.action = #selector(syncIntervalChanged)
+        stack.addArrangedSubview(row([syncOnIntervalCheckbox, syncIntervalPopup]))
+
+        syncNowButton.bezelStyle = .rounded
+        syncNowButton.target = self
+        syncNowButton.action = #selector(syncNowPressed)
+        stack.addArrangedSubview(syncNowButton)
+        syncStatusLabel.font = Theme.body(12)
+        syncStatusLabel.textColor = Theme.textSecondary
+        syncStatusLabel.preferredMaxLayoutWidth = 470
+        stack.addArrangedSubview(syncStatusLabel)
+
+        s3Controls = [endpointField, regionField, bucketField, prefixField, accessKeyField, secretField,
+                      pathStyleCheckbox, testConnectionButton, syncOnChangeCheckbox, syncAtLaunchCheckbox,
+                      syncOnIntervalCheckbox, syncIntervalPopup, syncNowButton]
+        applySyncEnablement()
+        refreshSyncStatus()
+        syncStatusObserver = NotificationCenter.default.addObserver(
+            forName: .syncStatusDidChange, object: nil, queue: .main
+        ) { [weak self] _ in self?.refreshSyncStatus() }
+    }
+
+    deinit {
+        if let syncStatusObserver { NotificationCenter.default.removeObserver(syncStatusObserver) }
+    }
+
+    /// Common setup for a sync text field: committed on Return or focus loss, never per keystroke.
+    private func configure(_ field: NSTextField, placeholder: String, value: String) {
+        field.placeholderString = placeholder
+        field.stringValue = value
+        field.font = Theme.body(12.5)
+        field.delegate = self
+        field.target = self
+        field.action = #selector(syncFieldCommitted)
+        field.translatesAutoresizingMaskIntoConstraints = false
+        field.widthAnchor.constraint(equalToConstant: 340).isActive = true
+    }
+
+    /// Enables or disables S3 controls and the Store Folder chooser for the current mode.
+    private func applySyncEnablement() {
+        let mode = PreferencesManager.shared.storageMode
+        let s3On = Self.s3ControlsEnabled(for: mode)
+        s3Controls.forEach { $0.isEnabled = s3On }
+        syncIntervalPopup.isEnabled = s3On && syncOnIntervalCheckbox.state == .on
+        chooseStoreButton.isEnabled = Self.storeFolderEnabled(for: mode)
+        storeNoteLabel.isHidden = Self.storeFolderEnabled(for: mode)
+    }
+
+    /// Shows "saved" as the secret field's placeholder when a Keychain entry exists.
+    private func refreshSecretPlaceholder() {
+        do {
+            let hasSecret = (try PreferencesManager.shared.s3SecretKey())?.isEmpty == false
+            secretField.placeholderString = hasSecret ? "saved" : "not set"
+        } catch {
+            secretField.placeholderString = "not set"
+            showTestResult("Could not read the Keychain: \(error.localizedDescription)", ok: false)
+        }
+    }
+
+    /// Updates the status line from the engine's current state.
+    private func refreshSyncStatus() {
+        let engine = SyncEngine.shared
+        syncStatusLabel.stringValue = Self.syncStatusText(status: engine.status, lastSync: engine.lastSyncDate)
+        if case .error = engine.status {
+            syncStatusLabel.textColor = Theme.danger
+        } else {
+            syncStatusLabel.textColor = Theme.textSecondary
+        }
+    }
+
+    /// Shows an inline result under Test Connection: green on success, red on failure.
+    private func showTestResult(_ text: String, ok: Bool) {
+        testResultLabel.stringValue = text
+        testResultLabel.textColor = ok ? Theme.accentBorder : Theme.danger
+        testResultLabel.isHidden = false
+    }
+
+    /// Writes every changed text field to Preferences. Skips unchanged values because each
+    /// setter posts `.syncConfigDidChange`, and saves a newly typed secret to the Keychain.
+    private func commitSyncFields() {
+        let prefs = PreferencesManager.shared
+        if endpointField.stringValue != prefs.s3Endpoint { prefs.s3Endpoint = endpointField.stringValue }
+        if regionField.stringValue != prefs.s3Region { prefs.s3Region = regionField.stringValue }
+        if bucketField.stringValue != prefs.s3Bucket { prefs.s3Bucket = bucketField.stringValue }
+        if prefixField.stringValue != prefs.s3Prefix { prefs.s3Prefix = prefixField.stringValue }
+        if accessKeyField.stringValue != prefs.s3AccessKeyID { prefs.s3AccessKeyID = accessKeyField.stringValue }
+        let secret = secretField.stringValue
+        if !secret.isEmpty {
+            do {
+                try prefs.setS3SecretKey(secret)
+                secretField.stringValue = ""
+                refreshSecretPlaceholder()
+            } catch {
+                showTestResult("Could not save the secret key to the Keychain: \(error.localizedDescription)", ok: false)
+            }
+        }
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) {
+        commitSyncFields()
+    }
+
     // MARK: - Layout helpers
 
     /// Small-caps section header, matching the design's "HOTKEYS"-style subsection labels.
@@ -377,6 +603,78 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         }
     }
 
+    // MARK: - Sync actions
+
+    @objc private func syncFieldCommitted() { commitSyncFields() }
+
+    @objc private func storageModeChanged() {
+        let index = storageModePopup.indexOfSelectedItem
+        guard Self.storageModeChoices.indices.contains(index) else { return }
+        commitSyncFields()
+        // AppDelegate re-applies the store root when it hears the config change.
+        PreferencesManager.shared.storageMode = Self.storageModeChoices[index].mode
+        applySyncEnablement()
+    }
+
+    @objc private func pathStyleToggled() {
+        PreferencesManager.shared.s3UsePathStyle = pathStyleCheckbox.state == .on
+    }
+
+    @objc private func syncTriggerToggled() {
+        let prefs = PreferencesManager.shared
+        prefs.syncOnChange = syncOnChangeCheckbox.state == .on
+        prefs.syncAtLaunch = syncAtLaunchCheckbox.state == .on
+        prefs.syncOnInterval = syncOnIntervalCheckbox.state == .on
+        applySyncEnablement()
+    }
+
+    @objc private func syncIntervalChanged() {
+        let index = syncIntervalPopup.indexOfSelectedItem
+        guard Self.syncIntervalChoices.indices.contains(index) else { return }
+        PreferencesManager.shared.syncInterval = Self.syncIntervalChoices[index].seconds
+    }
+
+    @objc private func syncNowPressed() {
+        commitSyncFields()
+        SyncEngine.shared.syncNow()
+    }
+
+    /// Tests the connection with the fields as currently typed (saved or not) and the typed
+    /// secret, falling back to the stored one.
+    @objc private func testConnection() {
+        commitSyncFields()
+        guard let config = PreferencesManager.makeS3Config(
+            endpoint: endpointField.stringValue, region: regionField.stringValue,
+            bucket: bucketField.stringValue, prefix: prefixField.stringValue,
+            usePathStyle: pathStyleCheckbox.state == .on, accessKeyID: accessKeyField.stringValue
+        ) else {
+            showTestResult("Enter a valid http(s) endpoint, bucket, and access key ID first.", ok: false)
+            return
+        }
+        let secret: String
+        do {
+            guard let stored = try PreferencesManager.shared.s3SecretKey(), !stored.isEmpty else {
+                showTestResult("Enter the secret key first.", ok: false)
+                return
+            }
+            secret = stored
+        } catch {
+            showTestResult("Could not read the secret key from the Keychain: \(error.localizedDescription)", ok: false)
+            return
+        }
+        testConnectionButton.isEnabled = false
+        showTestResult("Testing\u{2026}", ok: true)
+        Task { @MainActor in
+            defer { testConnectionButton.isEnabled = Self.s3ControlsEnabled(for: PreferencesManager.shared.storageMode) }
+            do {
+                try await S3Client(config: config, secretKey: secret).testConnection()
+                showTestResult("Connected. The bucket is reachable.", ok: true)
+            } catch {
+                showTestResult(error.localizedDescription, ok: false)
+            }
+        }
+    }
+
     // MARK: - Actions
 
     @objc private func chooseStore() {
@@ -388,12 +686,10 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         panel.directoryURL = PreferencesManager.shared.storeURL ?? PreferencesManager.shared.defaultStoreURL
         if panel.runModal() == .OK, let url = panel.url {
             PreferencesManager.shared.storeURL = url
-            NoteStore.shared.rootURL = url
             storePathLabel.stringValue = url.path
-            (NSApp.delegate as? AppDelegate)?.restartWatcher()
-            // Pull settings from (or seed them into) the newly chosen folder.
-            SettingsSync.shared.start()
-            NotificationCenter.default.post(name: .notesDidChange, object: nil)
+            // Switches the root (unless S3-only mode keeps it on the cache), restarts the
+            // watcher and settings mirror, and reloads the UI.
+            (NSApp.delegate as? AppDelegate)?.applyStoreRoot()
         }
     }
 

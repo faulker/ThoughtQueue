@@ -28,17 +28,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupMainMenu()
         setupStatusItem()
 
-        // Configure the store: use the saved folder, or prompt the user on first run.
-        // Both paths run synchronously, so the store root is set by the time we return.
-        if let url = PreferencesManager.shared.storeURL {
-            NoteStore.shared.rootURL = url
-            startWatcher()
+        // Configure the store: use the root the storage mode calls for, or prompt the user on
+        // first run. Both paths run synchronously, so the store root is set by the time we return.
+        // `applyStoreRoot` also starts the watcher and the settings mirror.
+        if PreferencesManager.shared.effectiveStoreURL != nil {
+            applyStoreRoot()
         } else {
             promptForStoreFolder()
         }
-
-        // Mirror settings into the store folder (default on) once the root is known.
-        SettingsSync.shared.start()
+        NotificationCenter.default.addObserver(self, selector: #selector(syncConfigChanged),
+                                               name: .syncConfigDidChange, object: nil)
+        // Arm S3 sync triggers (inert in Local mode) and run the launch sync if enabled.
+        SyncEngine.shared.start()
+        NotificationCenter.default.addObserver(self, selector: #selector(syncConflictsDetected),
+                                               name: .syncConflictsDetected, object: nil)
 
         // Accessibility permission for hotkeys + keyboard simulation.
         if !AXIsProcessTrusted() {
@@ -115,8 +118,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if response == .alertFirstButtonReturn {
             try? FileManager.default.createDirectory(at: proposed, withIntermediateDirectories: true)
             prefs.storeURL = proposed
-            NoteStore.shared.rootURL = proposed
-            startWatcher()
         } else {
             let panel = NSOpenPanel()
             panel.canChooseDirectories = true
@@ -126,16 +127,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panel.directoryURL = proposed.deletingLastPathComponent()
             if panel.runModal() == .OK, let url = panel.url {
                 prefs.storeURL = url
-                NoteStore.shared.rootURL = url
-                startWatcher()
             } else {
                 // No folder chosen: fall back to the proposed default so the app stays usable.
                 try? FileManager.default.createDirectory(at: proposed, withIntermediateDirectories: true)
                 prefs.storeURL = proposed
-                NoteStore.shared.rootURL = proposed
-                startWatcher()
             }
         }
+        applyStoreRoot()
+    }
+
+    // MARK: - Store root
+
+    /// Points `NoteStore` at the root the current storage mode calls for (the chosen folder, or
+    /// the S3 cache in S3-only mode), then restarts the watcher and settings mirror and tells the
+    /// UI to reload. The single place the root changes: launch, first-run, Preferences' folder
+    /// chooser and storage-mode switches all come through here.
+    ///
+    /// Switching from a local folder into the S3 cache first seeds the cache with that folder's
+    /// notes (merge only, never deletes), so they are carried into the bucket on the next sync.
+    func applyStoreRoot() {
+        let prefs = PreferencesManager.shared
+        guard let newRoot = prefs.effectiveStoreURL else {
+            log.error("applyStoreRoot called with no store folder chosen")
+            return
+        }
+        let oldRoot = NoteStore.shared.rootURL
+        if prefs.storageMode == .s3, let oldRoot,
+           oldRoot.standardizedFileURL.path != newRoot.standardizedFileURL.path {
+            do {
+                let copied = try SyncEngine.seedCache(from: oldRoot, into: newRoot)
+                log.info("Seeded S3 cache with \(copied.count) files")
+            } catch {
+                log.error("Seeding the S3 cache failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        NoteStore.shared.rootURL = newRoot
+        startWatcher()
+        // Pull settings from (or seed them into) the new root.
+        SettingsSync.shared.start()
+        NotificationCenter.default.post(name: .notesDidChange, object: nil)
+    }
+
+    /// Re-applies the store root when a storage-mode change moved it.
+    @objc private func syncConfigChanged() {
+        let current = NoteStore.shared.rootURL?.standardizedFileURL.path
+        guard let wanted = PreferencesManager.shared.effectiveStoreURL,
+              wanted.standardizedFileURL.path != current else { return }
+        applyStoreRoot()
+    }
+
+    /// Opens the conflict window when a sync records new conflicts.
+    @objc private func syncConflictsDetected() {
+        SyncConflictWindowController.shared.present()
     }
 
     // MARK: - Folder watcher
@@ -300,6 +343,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = nil
     }
 
+    /// Supplies the open sync conflicts for the menu. Replaceable so tests need no sync state.
+    var openConflictsProvider: () -> [SyncState.Conflict] = { MainActor.assumeIsolated { SyncEngine.shared.openConflicts() } }
+
     /// The right-click menu. Built separately from showing it so its contents are testable.
     func buildContextMenu() -> NSMenu {
         let menu = NSMenu()
@@ -311,6 +357,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Nothing to reveal until the store root is known (first run, before the chooser).
         folderItem.isEnabled = NoteStore.shared.rootURL != nil
         menu.addItem(folderItem)
+        if PreferencesManager.shared.storageMode != .local {
+            menu.addItem(NSMenuItem.separator())
+            menu.addItem(NSMenuItem(title: "Sync Now", action: #selector(syncNow), keyEquivalent: ""))
+            if !openConflictsProvider().isEmpty {
+                menu.addItem(NSMenuItem(title: "Resolve Sync Conflicts\u{2026}", action: #selector(openSyncConflicts), keyEquivalent: ""))
+            }
+        }
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Preferences\u{2026}", action: #selector(openPreferences), keyEquivalent: ","))
         menu.addItem(NSMenuItem.separator())
@@ -334,6 +387,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         NSWorkspace.shared.activateFileViewerSelecting([root])
+    }
+
+    /// Runs a sync immediately (menu item).
+    @objc func syncNow() {
+        MainActor.assumeIsolated { SyncEngine.shared.syncNow() }
+    }
+
+    /// Opens the conflict window (menu item).
+    @objc func openSyncConflicts() {
+        SyncConflictWindowController.shared.present()
     }
 
     @objc private func openPreferences() {

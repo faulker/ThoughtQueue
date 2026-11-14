@@ -562,7 +562,9 @@ final class NoteStore {
 
     // MARK: - Notifications
 
-    private func postChange() {
+    /// Post `.notesDidChange` on the main thread. Internal so the sync engine can announce
+    /// a batch of downloaded files with one notification.
+    func postChange() {
         if Thread.isMainThread {
             NotificationCenter.default.post(name: .notesDidChange, object: nil)
         } else {

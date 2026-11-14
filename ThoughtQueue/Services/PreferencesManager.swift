@@ -23,6 +23,15 @@ extension Notification.Name {
     static let syncSettingsEnabledDidChange = Notification.Name("syncSettingsEnabledDidChange")
     /// Posted when the update-check toggle or interval changes, so the scheduler re-arms.
     static let updateCheckSettingsDidChange = Notification.Name("updateCheckSettingsDidChange")
+    /// Posted when the storage mode, S3 connection settings, secret, or sync triggers change,
+    /// so the store root and the sync engine can reconfigure.
+    static let syncConfigDidChange = Notification.Name("syncConfigDidChange")
+}
+
+/// Where notes live. `local` is a plain folder (no S3), `s3` keeps a hidden cache folder in
+/// Application Support that mirrors the bucket, and `both` syncs the user's chosen folder.
+enum StorageMode: String, CaseIterable {
+    case local, s3, both
 }
 
 /// How clicking a note in the UI behaves.
@@ -79,6 +88,17 @@ final class PreferencesManager {
         static let themeMode = "themeMode"
         static let lightThemeID = "lightThemeID"
         static let darkThemeID = "darkThemeID"
+        static let storageMode = "storageMode"
+        static let s3Endpoint = "s3Endpoint"
+        static let s3Region = "s3Region"
+        static let s3Bucket = "s3Bucket"
+        static let s3Prefix = "s3Prefix"
+        static let s3UsePathStyle = "s3UsePathStyle"
+        static let s3AccessKeyID = "s3AccessKeyID"
+        static let syncOnChange = "syncOnChange"
+        static let syncAtLaunch = "syncAtLaunch"
+        static let syncOnInterval = "syncOnInterval"
+        static let syncInterval = "syncInterval"
     }
 
     private init() {}
@@ -177,6 +197,151 @@ final class PreferencesManager {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser
         return docs.appendingPathComponent("ThoughtQueue", isDirectory: true)
+    }
+
+    // MARK: - Storage mode and S3 sync
+
+    /// The Keychain account the S3 secret key is filed under. Fixed (rather than keyed on the
+    /// access key ID) so editing the access key ID never orphans or loses the stored secret.
+    static let s3SecretAccount = "s3-secret-key"
+
+    /// Default seconds between interval syncs.
+    static let defaultSyncInterval: TimeInterval = 300
+
+    /// Hidden cache folder that holds the notes in `.s3` mode.
+    static var s3CacheURL: URL {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        return support.appendingPathComponent("ThoughtQueue", isDirectory: true)
+            .appendingPathComponent("S3Cache", isDirectory: true)
+    }
+
+    /// Resolves the store root a mode calls for: the S3 cache in `.s3` mode, otherwise the
+    /// user's chosen folder (nil when none has been chosen yet). Pure so it is testable.
+    static func effectiveStoreRoot(mode: StorageMode, storeURL: URL?, cacheURL: URL) -> URL? {
+        switch mode {
+        case .s3: return cacheURL
+        case .local, .both: return storeURL
+        }
+    }
+
+    /// The folder `NoteStore.rootURL` should point at for the current storage mode.
+    var effectiveStoreURL: URL? {
+        Self.effectiveStoreRoot(mode: storageMode, storeURL: storeURL, cacheURL: Self.s3CacheURL)
+    }
+
+    /// Where notes live and whether they sync. Defaults to `.local`.
+    var storageMode: StorageMode {
+        get { StorageMode(rawValue: defaults.string(forKey: Keys.storageMode) ?? "") ?? .local }
+        set { setSyncValue(newValue.rawValue, forKey: Keys.storageMode) }
+    }
+
+    /// S3 service URL as typed, e.g. `https://s3.us-east-1.amazonaws.com`.
+    var s3Endpoint: String {
+        get { defaults.string(forKey: Keys.s3Endpoint) ?? "" }
+        set { setSyncValue(newValue, forKey: Keys.s3Endpoint) }
+    }
+
+    /// S3 signing region. Empty means `us-east-1` (what MinIO and RustFS accept by default).
+    var s3Region: String {
+        get { defaults.string(forKey: Keys.s3Region) ?? "" }
+        set { setSyncValue(newValue, forKey: Keys.s3Region) }
+    }
+
+    var s3Bucket: String {
+        get { defaults.string(forKey: Keys.s3Bucket) ?? "" }
+        set { setSyncValue(newValue, forKey: Keys.s3Bucket) }
+    }
+
+    /// Optional folder inside the bucket that notes live under.
+    var s3Prefix: String {
+        get { defaults.string(forKey: Keys.s3Prefix) ?? "" }
+        set { setSyncValue(newValue, forKey: Keys.s3Prefix) }
+    }
+
+    /// Path-style addressing (MinIO/RustFS). Defaults to true since self-hosted services need it.
+    var s3UsePathStyle: Bool {
+        get { defaults.object(forKey: Keys.s3UsePathStyle) == nil ? true : defaults.bool(forKey: Keys.s3UsePathStyle) }
+        set { setSyncValue(newValue, forKey: Keys.s3UsePathStyle) }
+    }
+
+    var s3AccessKeyID: String {
+        get { defaults.string(forKey: Keys.s3AccessKeyID) ?? "" }
+        set { setSyncValue(newValue, forKey: Keys.s3AccessKeyID) }
+    }
+
+    /// The stored connection settings as an `S3Config`, or nil when the endpoint is not a
+    /// valid http(s) URL or the bucket or access key ID is empty.
+    var s3Config: S3Config? {
+        Self.makeS3Config(endpoint: s3Endpoint, region: s3Region, bucket: s3Bucket, prefix: s3Prefix,
+                          usePathStyle: s3UsePathStyle, accessKeyID: s3AccessKeyID)
+    }
+
+    /// Builds an `S3Config` from raw field values, trimming whitespace. Pure so it is testable.
+    static func makeS3Config(endpoint: String, region: String, bucket: String, prefix: String,
+                             usePathStyle: Bool, accessKeyID: String) -> S3Config? {
+        let trimmedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBucket = bucket.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedKeyID = accessKeyID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedRegion = region.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmedEndpoint),
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              url.host != nil, !trimmedBucket.isEmpty, !trimmedKeyID.isEmpty else { return nil }
+        return S3Config(endpoint: url,
+                        region: trimmedRegion.isEmpty ? "us-east-1" : trimmedRegion,
+                        bucket: trimmedBucket,
+                        keyPrefix: prefix.trimmingCharacters(in: .whitespacesAndNewlines),
+                        usePathStyle: usePathStyle,
+                        accessKeyID: trimmedKeyID)
+    }
+
+    /// Reads the S3 secret key from the Keychain, or nil when none is stored.
+    func s3SecretKey() throws -> String? {
+        try KeychainStore().load(account: Self.s3SecretAccount)
+    }
+
+    /// Stores the S3 secret key in the Keychain; nil or empty deletes it. Posts `.syncConfigDidChange`.
+    func setS3SecretKey(_ secret: String?) throws {
+        let store = KeychainStore()
+        if let secret, !secret.isEmpty {
+            try store.save(secret, account: Self.s3SecretAccount)
+        } else {
+            try store.delete(account: Self.s3SecretAccount)
+        }
+        NotificationCenter.default.post(name: .syncConfigDidChange, object: nil)
+    }
+
+    /// Sync after local edits (debounced). On by default.
+    var syncOnChange: Bool {
+        get { defaults.object(forKey: Keys.syncOnChange) == nil ? true : defaults.bool(forKey: Keys.syncOnChange) }
+        set { setSyncValue(newValue, forKey: Keys.syncOnChange) }
+    }
+
+    /// Sync once at launch. On by default.
+    var syncAtLaunch: Bool {
+        get { defaults.object(forKey: Keys.syncAtLaunch) == nil ? true : defaults.bool(forKey: Keys.syncAtLaunch) }
+        set { setSyncValue(newValue, forKey: Keys.syncAtLaunch) }
+    }
+
+    /// Sync on a timer every `syncInterval` seconds. On by default.
+    var syncOnInterval: Bool {
+        get { defaults.object(forKey: Keys.syncOnInterval) == nil ? true : defaults.bool(forKey: Keys.syncOnInterval) }
+        set { setSyncValue(newValue, forKey: Keys.syncOnInterval) }
+    }
+
+    /// Seconds between interval syncs. Defaults to 300; values under 30 are clamped up to 30.
+    var syncInterval: TimeInterval {
+        get {
+            let stored = defaults.double(forKey: Keys.syncInterval)
+            return stored > 0 ? max(30, stored) : Self.defaultSyncInterval
+        }
+        set { setSyncValue(newValue, forKey: Keys.syncInterval) }
+    }
+
+    /// Writes a sync-related default and announces it with `.syncConfigDidChange`.
+    private func setSyncValue(_ value: Any, forKey key: String) {
+        defaults.set(value, forKey: key)
+        NotificationCenter.default.post(name: .syncConfigDidChange, object: nil)
     }
 
     // MARK: - Working document

@@ -24,6 +24,8 @@
     <true/>
     <key>ATSApplicationFontsPath</key>
     <string>Fonts</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>ThoughtQueue connects to S3-compatible storage on your local network to sync notes.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSMainNibFile</key>

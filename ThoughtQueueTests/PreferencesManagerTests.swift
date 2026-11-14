@@ -166,4 +166,47 @@ final class PreferencesManagerTests: XCTestCase {
     func testThemeModeIsSyncable() {
         XCTAssertTrue(PreferencesManager.syncableKeys.contains("themeMode"))
     }
+
+    // MARK: - Storage mode
+
+    /// Each storage mode resolves to the right store root.
+    func testEffectiveStoreRootPerMode() {
+        let folder = URL(fileURLWithPath: "/tmp/tq-notes", isDirectory: true)
+        let cache = URL(fileURLWithPath: "/tmp/tq-cache", isDirectory: true)
+        XCTAssertEqual(PreferencesManager.effectiveStoreRoot(mode: .local, storeURL: folder, cacheURL: cache), folder)
+        XCTAssertEqual(PreferencesManager.effectiveStoreRoot(mode: .both, storeURL: folder, cacheURL: cache), folder)
+        XCTAssertEqual(PreferencesManager.effectiveStoreRoot(mode: .s3, storeURL: folder, cacheURL: cache), cache)
+        XCTAssertEqual(PreferencesManager.effectiveStoreRoot(mode: .s3, storeURL: nil, cacheURL: cache), cache)
+        XCTAssertNil(PreferencesManager.effectiveStoreRoot(mode: .local, storeURL: nil, cacheURL: cache))
+        XCTAssertNil(PreferencesManager.effectiveStoreRoot(mode: .both, storeURL: nil, cacheURL: cache))
+    }
+
+    /// The S3 cache lives in Application Support, outside any user folder.
+    func testS3CacheURLIsInApplicationSupport() {
+        let path = PreferencesManager.s3CacheURL.path
+        XCTAssertTrue(path.hasSuffix("Application Support/ThoughtQueue/S3Cache"), path)
+    }
+
+    /// Valid fields build a config; a missing bucket, key ID, or bad endpoint does not.
+    func testMakeS3Config() throws {
+        let config = try XCTUnwrap(PreferencesManager.makeS3Config(
+            endpoint: " http://localhost:9000 ", region: "", bucket: "notes", prefix: "tq/",
+            usePathStyle: true, accessKeyID: "AKID"))
+        XCTAssertEqual(config.endpoint.absoluteString, "http://localhost:9000")
+        XCTAssertEqual(config.region, "us-east-1")
+        XCTAssertEqual(config.normalizedPrefix, "tq/")
+        XCTAssertNil(PreferencesManager.makeS3Config(endpoint: "http://h", region: "", bucket: "", prefix: "",
+                                                     usePathStyle: true, accessKeyID: "AKID"))
+        XCTAssertNil(PreferencesManager.makeS3Config(endpoint: "http://h", region: "", bucket: "b", prefix: "",
+                                                     usePathStyle: true, accessKeyID: ""))
+        XCTAssertNil(PreferencesManager.makeS3Config(endpoint: "not a url", region: "", bucket: "b", prefix: "",
+                                                     usePathStyle: true, accessKeyID: "AKID"))
+    }
+
+    /// S3 sync settings are device-local and never mirrored into the store folder.
+    func testSyncSettingsAreNotSyncable() {
+        for key in ["storageMode", "s3Endpoint", "s3Bucket", "s3AccessKeyID", "syncOnChange", "syncInterval"] {
+            XCTAssertFalse(PreferencesManager.syncableKeys.contains(key), key)
+        }
+    }
 }
