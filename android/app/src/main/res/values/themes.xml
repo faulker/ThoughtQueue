@@ -1,0 +1,4 @@
+<resources>
+    <style name="Theme.ThoughtQueue" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.ThoughtQueue.Transparent" parent="android:Theme.Translucent.NoTitleBar" />
+</resources>

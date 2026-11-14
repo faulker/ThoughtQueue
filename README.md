@@ -29,6 +29,10 @@ You're reading something, debugging code, or thinking out loud and want to jot i
 - **Customizable hotkeys** -- change shortcuts in Preferences
 - **Auto-update** -- for installed / downloaded copies, checks GitHub Releases at launch and on an interval you choose, then offers to download, verify, install, and restart itself. Local Xcode / `build.sh` builds skip this. Turn it off or check on demand in Preferences
 
+## Android
+
+There's an Android companion app in [`android/`](android/). It uses the same notes format and syncs through the same S3 bucket, and covers notes, categories, checklists, themes, and local, S3, or both storage. Desktop-only features (global hotkeys, Open With, auto-update, on-device auto-title) are not included. Build and release details are in [`android/README.md`](android/README.md).
+
 ## Screenshots
 
 ### Menu bar popover
@@ -71,10 +75,12 @@ cd ThoughtQueue
 Unsigned, fastest, what you want while iterating:
 
 ```bash
-./build.sh              # defaults to Debug
+./build.sh              # defaults to Debug; also builds the Android debug APK
 # or: ./build.sh Debug
 open build/Build/Products/Debug/ThoughtQueue.app
 ```
+
+The script prints the APK path when it finishes (`android/app/build/outputs/apk/debug/app-debug.apk`).
 
 ### Production build (signed for distribution)
 
@@ -98,6 +104,8 @@ Then build:
 ./build.sh Release
 open build/Build/Products/Release/ThoughtQueue.app
 ```
+
+The same command builds the Android release APK and prints its path. Without the keystore env vars from the Android README, that APK is unsigned.
 
 The script auto-detects the first `Developer ID Application` identity in your keychain, extracts your Team ID, signs the app with hardened runtime and a secure timestamp, then runs `codesign --verify` to confirm the signature is valid. If no identity is found, the build fails with a clear error.
 

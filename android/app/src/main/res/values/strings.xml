@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">ThoughtQueue</string>
+    <string name="share_label">Save to ThoughtQueue</string>
+</resources>

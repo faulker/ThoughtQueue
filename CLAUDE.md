@@ -26,6 +26,8 @@ Releases are built by `.github/workflows/release.yml` (tag push `v*` or manual r
 
 **ThoughtQueue** is a macOS menu bar app (LSUIElement) for capturing text snippets and sending them to Claude Desktop. Swift + AppKit, no external dependencies.
 
+The Android app in `android/` (Kotlin/Compose) mirrors `Store/` and `Sync/` package by package; see `android/README.md`. Any change to the on-disk or sync format (`metadata.json`, `sync-state.json`, synced-key rules) must be made in both apps.
+
 ### Core flow
 
 1. User selects text in any app, hits a global hotkey

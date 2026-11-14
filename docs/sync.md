@@ -2,6 +2,8 @@
 
 Optional bi-directional sync between the notes folder and an S3-compatible bucket (AWS S3, [RustFS](https://github.com/rustfs/rustfs), [MinIO](https://min.io)). Code lives in `ThoughtQueue/Sync/`; the engine is `SyncEngine`, the decision table is `SyncPlanner`.
 
+The Android app (`android/app/src/main/java/com/thoughtqueue/app/sync/`) implements this same format and these same rules, so the macOS and Android apps can share a bucket. Any change to the sync format has to land in both.
+
 ## Storage modes
 
 `PreferencesManager.storageMode`:
@@ -88,3 +90,5 @@ xcodebuild -project ThoughtQueue.xcodeproj -scheme ThoughtQueueTests test -only-
 ```
 
 Optional: `TEST_RUNNER_TQ_S3_REGION`, `TEST_RUNNER_TQ_S3_PATH_STYLE=false`, `TEST_RUNNER_TQ_S3_PAGINATION=1`.
+
+The Android equivalent is `S3IntegrationTest`. It reads the same `TQ_S3_*` variables, without the `TEST_RUNNER_` prefix, and runs with `cd android && ./gradlew testDebugUnitTest --tests '*S3IntegrationTest*'`.

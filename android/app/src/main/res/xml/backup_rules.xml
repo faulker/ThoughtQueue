@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The encrypted S3 secret cannot be decrypted on another device (its key is in the Keystore),
+     so it is never backed up. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="thoughtqueue_secrets.xml" />
+</full-backup-content>
