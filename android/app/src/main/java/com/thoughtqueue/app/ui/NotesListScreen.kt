@@ -122,6 +122,7 @@ fun NotesListScreen(
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             if (conflicts.isNotEmpty()) ConflictBanner(conflicts.size, onConflicts)
+            UpdateBanner(app)
             SearchField(query, { query = it }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             Row(
                 Modifier.padding(horizontal = 16.dp, vertical = 4.dp),

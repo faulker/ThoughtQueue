@@ -25,6 +25,7 @@ The debug APK is at `app/build/outputs/apk/debug/app-debug.apk`. From the repo r
 - `ui/`, `ui/theme/`: Compose screens and the theme system (built-in and custom JSON themes, see `../docs/themes.md`).
 - `sync/`: S3 sync, a port of the desktop's `ThoughtQueue/Sync/` (SigV4, S3 client, planner, state, engine).
   Everything except `SecretStore` and `SyncWorker` is plain JVM code, so the tests run without a device.
+- `update/`: GitHub release check and sideload install. `UpdateCheck` (version compare, checksum lookup) is plain JVM. The downloader and package installer are Android-only.
 
 Notes live in `filesDir/notes` as plain `.md` files. Document type and archive flags are kept only in
 `.thoughtqueue/metadata.json`, in the same shape the desktop writes.
@@ -80,6 +81,16 @@ TQ_S3_SECRET_KEY=tqsecret123 \
 Optional: `TQ_S3_REGION` (default `us-east-1`), `TQ_S3_PATH_STYLE=false` for virtual-host addressing,
 `TQ_S3_PAGINATION=1` to also list about 1000 objects. Gradle forwards these to the test JVM. See
 `../docs/sync.md` for starting a local server; the same bucket can run the desktop's integration test too.
+
+## Updates
+
+A signed release install checks GitHub for a newer version when the app starts (at most once a day) and from Settings → Updates → Check for updates. The check is a `HEAD` to `https://github.com/faulker/ThoughtQueue/releases/latest`, the same redirect the Mac app uses. No GitHub API.
+
+When a newer tag is published, the app downloads `ThoughtQueue-<version>.apk` (the signed APK from that release), checks it against `checksums-sha256.txt`, and checks that its signing certificate matches this install. Then the system installer asks you to confirm. You also have to allow ThoughtQueue to install unknown apps the first time.
+
+The `.aab` on the release cannot be installed on a device. Android only installs APKs. `ThoughtQueue-<version>-unsigned.apk` is not used either: Android will not install an unsigned package, and a later update has to be signed with the same keystore as the copy already on the phone.
+
+Debug builds, and builds installed under another application id (`-PappIdSuffix`), skip the check. A copy installed from Play is signed by Play, not by the GitHub APK, so this updater will refuse it.
 
 ## Releasing
 

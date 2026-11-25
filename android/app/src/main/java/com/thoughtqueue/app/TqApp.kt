@@ -14,6 +14,7 @@ import com.thoughtqueue.app.sync.SyncErrorMessage
 import com.thoughtqueue.app.sync.SyncScheduler
 import com.thoughtqueue.app.sync.SyncState
 import com.thoughtqueue.app.ui.theme.ThemeLibrary
+import com.thoughtqueue.app.update.UpdateController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +42,8 @@ class TqApp : Application() {
     lateinit var secrets: SecretStore
         private set
     lateinit var sync: SyncEngine
+        private set
+    lateinit var updates: UpdateController
         private set
 
     private val log = Logger.getLogger("TqApp")
@@ -77,6 +80,8 @@ class TqApp : Application() {
         }
         refreshSyncState()
         if (prefs.syncSettings.value.syncAtLaunch) sync.requestSync(userInitiated = false)
+        updates = UpdateController(this, prefs, appScope)
+        updates.checkIfDue()
     }
 
     /**

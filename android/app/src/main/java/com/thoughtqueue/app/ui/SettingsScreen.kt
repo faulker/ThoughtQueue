@@ -61,7 +61,7 @@ private fun readPicked(context: Context, uri: Uri): Pair<String, String> {
 
 /**
  * Settings: appearance mode, light and dark theme pickers, theme import (document picker copies
- * the JSON into the app's themes folder), the default edit mode, and the Storage & Sync section.
+ * the JSON into the app's themes folder), the default edit mode, Storage & Sync, and updates.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -139,6 +139,9 @@ fun SettingsScreen(app: TqApp, onBack: () -> Unit, onConflicts: () -> Unit) {
 
             HorizontalDivider(color = palette.divider)
             SyncSettingsSection(app, onConflicts)
+
+            HorizontalDivider(color = palette.divider)
+            UpdateSettingsSection(app)
         }
     }
 }

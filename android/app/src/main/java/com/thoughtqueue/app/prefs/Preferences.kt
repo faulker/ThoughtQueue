@@ -167,6 +167,14 @@ class Preferences(context: Context) {
         _editMode.value = mode
     }
 
+    /** Millis of the last successful update check, or 0 when none has completed. */
+    fun lastUpdateCheckAt(): Long = sp.getLong(KEY_LAST_UPDATE_CHECK, 0L)
+
+    /** Records that an update check just reached GitHub. */
+    fun setLastUpdateCheckAt(millis: Long) {
+        sp.edit().putLong(KEY_LAST_UPDATE_CHECK, millis).apply()
+    }
+
     /** Reads an enum preference, falling back to [default] for a missing or unknown value. */
     private inline fun <reified T : Enum<T>> readEnum(key: String, default: T): T =
         sp.getString(key, null)?.let { name -> enumValues<T>().firstOrNull { it.name == name } } ?: default
@@ -187,5 +195,6 @@ class Preferences(context: Context) {
         const val KEY_SYNC_ON_CHANGE = "syncOnChange"
         const val KEY_SYNC_ON_INTERVAL = "syncOnInterval"
         const val KEY_SYNC_INTERVAL_MINUTES = "syncIntervalMinutes"
+        const val KEY_LAST_UPDATE_CHECK = "lastUpdateCheckAt"
     }
 }

@@ -125,7 +125,7 @@ To keep ThoughtQueue available, drag `ThoughtQueue.app` to your Applications fol
 
 ## Releasing
 
-`.github/workflows/release.yml` builds a universal (arm64 + x86_64) app on a macOS runner, runs the test suite, signs and notarizes it when the Apple secrets are present, then publishes a GitHub Release with a `.dmg`, a `.zip`, and `checksums-sha256.txt`. A parallel job builds the Android APK and AAB for the same version and they're attached to that same release (details and Android signing secrets in [`android/README.md`](android/README.md#releasing)).
+`.github/workflows/release.yml` builds a universal (arm64 + x86_64) app on a macOS runner, runs the test suite, signs and notarizes it when the Apple secrets are present, then publishes a GitHub Release with a `.dmg`, a `.zip`, and `checksums-sha256.txt`. A parallel job builds the Android APK and AAB for the same version and they're attached to that same release (details and Android signing secrets in [`android/README.md`](android/README.md#releasing)). A signed sideload of the Android app can install a later `ThoughtQueue-<version>.apk` from that release itself (not the `.aab`); see [`android/README.md`](android/README.md#updates).
 
 Two ways to trigger it:
 
