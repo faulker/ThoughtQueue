@@ -54,6 +54,13 @@ enum NoteEditMode: String {
     case alwaysEdit   // open directly in raw-edit mode
 }
 
+/// What the Cmd+Q shortcut does.
+enum CmdQAction: String, CaseIterable {
+    case quit       // quit the app (asking first when `confirmQuit` is on)
+    case closeNote  // close the front window, never quitting
+    case nothing
+}
+
 /// UserDefaults-backed app configuration. Never writes anything into the store folder.
 final class PreferencesManager {
     static let shared = PreferencesManager()
@@ -70,6 +77,8 @@ final class PreferencesManager {
         static let workingDocPath = "workingDocumentPath"
         static let clickBehavior = "clickBehavior"
         static let noteEditMode = "noteEditMode"
+        static let cmdQAction = "cmdQAction"
+        static let confirmQuit = "confirmQuit"
         static let toastTimeout = "toastTimeout"
         static let openWithActions = "openWithActions"
         static let autoIntelEnabled = "autoIntelEnabled"
@@ -112,7 +121,7 @@ final class PreferencesManager {
     static let syncableKeys: [String] = [
         Keys.quickCaptureKeyCode, Keys.quickCaptureModifiers,
         Keys.detailedCaptureKeyCode, Keys.detailedCaptureModifiers,
-        Keys.clickBehavior, Keys.noteEditMode,
+        Keys.clickBehavior, Keys.noteEditMode, Keys.cmdQAction, Keys.confirmQuit,
         Keys.toastTimeout, Keys.openWithActions, Keys.autoIntelEnabled,
         Keys.editorFontName, Keys.editorFontSize,
         Keys.uiFontFamily, Keys.uiFontScale,
@@ -413,6 +422,20 @@ final class PreferencesManager {
     var noteEditMode: NoteEditMode {
         get { NoteEditMode(rawValue: defaults.string(forKey: Keys.noteEditMode) ?? "") ?? .doubleClick }
         set { defaults.set(newValue.rawValue, forKey: Keys.noteEditMode) }
+    }
+
+    // MARK: - Cmd+Q
+
+    /// What Cmd+Q does. Defaults to quitting.
+    var cmdQAction: CmdQAction {
+        get { CmdQAction(rawValue: defaults.string(forKey: Keys.cmdQAction) ?? "") ?? .quit }
+        set { defaults.set(newValue.rawValue, forKey: Keys.cmdQAction) }
+    }
+
+    /// Whether Cmd+Q asks before quitting. On by default.
+    var confirmQuit: Bool {
+        get { defaults.object(forKey: Keys.confirmQuit) == nil ? true : defaults.bool(forKey: Keys.confirmQuit) }
+        set { defaults.set(newValue, forKey: Keys.confirmQuit) }
     }
 
     // MARK: - Note editor font

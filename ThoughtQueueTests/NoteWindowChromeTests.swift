@@ -42,6 +42,27 @@ final class NoteWindowChromeTests: XCTestCase {
         XCTAssertEqual(navigator.archivedGroupNames, ["Done"])
     }
 
+    func testNewNoteMenuReportsCategoryAndType() throws {
+        let navigator = NoteNavigatorViewController()
+        _ = navigator.view
+        var created: [(String?, NoteDocType)] = []
+        navigator.onCreateNote = { created.append(($0, $1)) }
+        for item in navigator.newNoteItems(category: "Work") {
+            _ = navigator.perform(item.action, with: item)
+        }
+        XCTAssertEqual(created.map(\.0), ["Work", "Work"])
+        XCTAssertEqual(created.map(\.1), [.markdown, .checklist])
+    }
+
+    func testNewNotesFollowTheShownNotesFolderUnlessArchived() throws {
+        let note = try XCTUnwrap(NoteStore.shared.createNote(title: "Live", body: "x", category: "Work"))
+        let navigator = NoteNavigatorViewController()
+        navigator.highlight(note: note)
+        XCTAssertEqual(navigator.defaultNewNoteCategory, "Work")
+        XCTAssertTrue(NoteStore.shared.setArchived(true, category: "Work"))
+        XCTAssertNil(navigator.defaultNewNoteCategory)
+    }
+
     func testNavigatorReloadStillPicksUpLaterNotes() throws {
         let navigator = NoteNavigatorViewController()
         _ = navigator.view

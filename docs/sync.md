@@ -16,11 +16,15 @@ The Android app (`android/app/src/main/java/com/thoughtqueue/app/sync/`) impleme
 
 ## What is synced
 
-Every non-hidden `.md` file at any depth (categories are subfolders), plus two sidecars: `.thoughtqueue/metadata.json` (doc types, archive flags) and `.thoughtqueue/settings.plist`. Everything else under hidden folders (including `sync-state.json` and `conflicts/`) is never uploaded, and a remote key with a hidden, empty, `.` or `..` component is rejected (`SyncEngine.isSyncedKey`).
+Every non-hidden `.md` file at any depth (categories are subfolders), plus two sidecars: `.thoughtqueue/metadata.json` (doc types, archive flags) and `.thoughtqueue/settings.plist`. Everything else under hidden folders is never uploaded, and a remote key with a hidden, empty, `.` or `..` component is rejected (`SyncEngine.isSyncedKey`).
 
 ## Base state
 
-`.thoughtqueue/sync-state.json` stores, per key, the local SHA256 and the remote ETag from the last time both sides agreed (the "base"). A key with no base entry has never synced, so a missing file is never read as a deletion. The file is scoped to a config identity (endpoint + bucket + prefix); switching bucket starts from an empty base.
+`sync-state.json` stores, per key, the local SHA256 and the remote ETag from the last time both sides agreed (the "base"). A key with no base entry has never synced, so a missing file is never read as a deletion. The file is scoped to a config identity (endpoint + bucket + prefix); switching bucket starts from an empty base.
+
+The file is per device and lives outside the notes folder, because that folder may itself be shared (Google Drive, iCloud): macOS uses `~/Library/Application Support/ThoughtQueue/SyncState/<hash of root path>/`, Android uses `noBackupFilesDir/sync-state/<hash>/`. State left in `.thoughtqueue/` by older versions is migrated for app-private roots (the macOS S3 cache, both Android roots). A user-chosen macOS folder starts from an empty base instead, since the old file may describe another device.
+
+On macOS, if more than one note is in the base and every note is missing locally, the base is reset so the notes download again instead of being deleted from the bucket.
 
 ## Planner rules
 
@@ -45,10 +49,10 @@ Keys with an open conflict are skipped until resolved.
 
 ## Conflicts
 
-On a real conflict the local file is left alone and the remote bytes are parked at `.thoughtqueue/conflicts/<key>`. The key is recorded in `sync-state.json`, `.syncConflictsDetected` is posted, and `SyncConflictWindowController` offers:
+On a real conflict the local file is left alone and the remote bytes are parked at `conflicts/<key>` beside `sync-state.json`. The key is recorded there with `detectedAt` and an optional `remoteModifiedAt` (the bucket's upload time), `.syncConflictsDetected` is posted, and `SyncConflictWindowController` offers:
 
-- **Keep local**: upload local over remote.
-- **Keep remote**: replace local with the remote copy.
+- **Keep This Mac's**: upload local over remote.
+- **Keep Bucket's**: replace local with the remote copy.
 - **Keep both**: local stays, the remote copy is saved beside it as `Name (remote).md` and both are synced.
 
 ## Triggers

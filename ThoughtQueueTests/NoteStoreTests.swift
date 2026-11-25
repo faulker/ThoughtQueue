@@ -201,11 +201,12 @@ final class NoteStoreTests: XCTestCase {
 
     func testRenameCategoryRemapsWorkingDocument() throws {
         let note = try XCTUnwrap(store.createNote(title: "Sink", body: "x", category: "Inbox"))
+        let saved = PreferencesManager.shared.workingDocumentURL
+        defer { PreferencesManager.shared.workingDocumentURL = saved }
         PreferencesManager.shared.workingDocumentURL = note.url
         XCTAssertTrue(store.renameCategory("Inbox", to: "Active"))
         let working = try XCTUnwrap(PreferencesManager.shared.workingDocumentURL)
         XCTAssertTrue(working.path.contains("/Active/"))
         XCTAssertEqual(store.workingDocumentNote?.title, "sink")
-        PreferencesManager.shared.workingDocumentURL = nil
     }
 }

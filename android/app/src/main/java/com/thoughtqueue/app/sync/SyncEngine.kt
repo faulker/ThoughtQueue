@@ -19,6 +19,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.logging.Logger
 
 /** What the engine is doing right now. */
@@ -80,7 +81,7 @@ data class SyncReport(
  * Runs and conflict resolutions are serialized through a [Mutex] and do their work on
  * [Dispatchers.IO]. Triggered runs coalesce: a trigger while a run is going schedules exactly
  * one follow-up. Conflicts are never resolved automatically; the remote side is parked in
- * `.thoughtqueue/conflicts/<key>` and the key is skipped until [resolveConflict] is called.
+ * [SyncState.conflictFile] and the key is skipped until [resolveConflict] is called.
  *
  * The engine has no Android dependencies. The app supplies [contextProvider] (preferences plus
  * the secret store), [noteStoreProvider] (the active store, whose change signal is bumped after
@@ -271,16 +272,16 @@ class SyncEngine(
         val report = SyncReport()
 
         val localHashes = scanLocal(root).mapValues { sha256Hex(it.value.readBytes()) }
-        val remoteETags = context.store.list("")
-            .filter { isSyncedKey(it.key) }
-            .associate { it.key to it.etag }
+        val remoteObjects = context.store.list("").filter { isSyncedKey(it.key) }
+        val remoteETags = remoteObjects.associate { it.key to it.etag }
+        val remoteDates = remoteObjects.associate { it.key to it.lastModified }
 
         val actions = SyncPlanner.plan(
             localHashes, remoteETags, work.original.entries,
             work.original.conflicts.map { it.key }.toSet(),
         )
         try {
-            for (action in actions) apply(action, context, work, report)
+            for (action in actions) apply(action, remoteDates[action.key], context, work, report)
         } catch (e: Exception) {
             // Keep whatever progress was made so finished actions are not redone as conflicts.
             try {
@@ -295,7 +296,7 @@ class SyncEngine(
     }
 
     /** Carries out one planned action and records the new base for its key. */
-    private suspend fun apply(action: SyncAction, context: SyncContext, work: Working, report: SyncReport) {
+    private suspend fun apply(action: SyncAction, remoteDate: Instant?, context: SyncContext, work: Working, report: SyncReport) {
         val root = context.root
         val key = action.key
         when (action) {
@@ -323,7 +324,7 @@ class SyncEngine(
                 work.entries.remove(key)
                 report.deletedRemote.add(key)
             }
-            is SyncAction.Conflict -> recordConflictIfReal(key, context, work, report)
+            is SyncAction.Conflict -> recordConflictIfReal(key, remoteDate, context, work, report)
         }
     }
 
@@ -331,7 +332,7 @@ class SyncEngine(
      * Fetches both sides of a planned conflict. Identical bytes (or both gone) settle it
      * silently; otherwise the remote copy is parked under `conflicts/` and the key is recorded.
      */
-    private suspend fun recordConflictIfReal(key: String, context: SyncContext, work: Working, report: SyncReport) {
+    private suspend fun recordConflictIfReal(key: String, remoteDate: Instant?, context: SyncContext, work: Working, report: SyncReport) {
         val root = context.root
         val local = readLocalIfExists(key, root)
         val remote = getIfExists(key, context.store)
@@ -351,7 +352,9 @@ class SyncEngine(
         } else if (parked.exists() && !parked.delete()) {
             throw IOException("cannot remove stale parked copy ${parked.path}")
         }
-        work.conflicts.add(SyncState.Conflict(key, SyncState.now()))
+        // Second precision, as the file stores it.
+        val uploaded = remoteDate?.takeIf { remote != null }?.truncatedTo(ChronoUnit.SECONDS)
+        work.conflicts.add(SyncState.Conflict(key, SyncState.now(), uploaded))
         report.newConflicts.add(key)
     }
 

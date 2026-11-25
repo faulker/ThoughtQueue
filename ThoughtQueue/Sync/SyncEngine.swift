@@ -69,7 +69,7 @@ struct SyncReport: Equatable {
 ///
 /// Main-actor isolated: runs are serialized through a task chain, network calls suspend rather
 /// than block, and the local file work is small (markdown notes). Conflicts are never resolved
-/// automatically; the remote side is parked in `.thoughtqueue/conflicts/<key>` and the key is
+/// automatically; the remote side is parked in `SyncState.conflictFileURL` and the key is
 /// skipped until `resolveConflict` is called.
 @MainActor
 final class SyncEngine {
@@ -272,15 +272,26 @@ final class SyncEngine {
             localHashes[key] = Self.sha256Hex(try Data(contentsOf: url))
         }
         var remoteETags: [String: String] = [:]
+        var remoteDates: [String: Date] = [:]
         for object in try await context.store.list(prefix: "") where Self.isSyncedKey(object.key) {
             remoteETags[object.key] = object.etag
+            remoteDates[object.key] = object.lastModified
+        }
+
+        // The state outlives the notes folder. If every known note vanished at once, the folder was
+        // most likely replaced or its drive is not ready, so start over rather than delete them all.
+        let knownNotes = state.entries.keys.filter { $0 != Self.metadataKey && $0 != Self.settingsKey }
+        let hasLocalNotes = localHashes.keys.contains { $0 != Self.metadataKey && $0 != Self.settingsKey }
+        if knownNotes.count > 1, !hasLocalNotes {
+            log.warning("All known notes are missing locally; resetting the sync base")
+            state.entries = [:]
         }
 
         let actions = SyncPlanner.plan(local: localHashes, remote: remoteETags, base: state.entries,
                                        openConflicts: Set(state.conflicts.map(\.key)))
         do {
             for action in actions {
-                try await apply(action, context: context, state: &state, report: &report)
+                try await apply(action, remoteDates: remoteDates, context: context, state: &state, report: &report)
             }
         } catch {
             // Keep whatever progress was made so finished actions are not redone as conflicts.
@@ -296,7 +307,7 @@ final class SyncEngine {
     }
 
     /// Carries out one planned action and records the new base for its key.
-    private func apply(_ action: SyncAction, context: SyncContext, state: inout SyncState, report: inout SyncReport) async throws {
+    private func apply(_ action: SyncAction, remoteDates: [String: Date], context: SyncContext, state: inout SyncState, report: inout SyncReport) async throws {
         let root = context.root
         switch action {
         case .noop:
@@ -322,13 +333,13 @@ final class SyncEngine {
             state.entries[key] = nil
             report.deletedRemote.append(key)
         case .conflict(let key):
-            try await recordConflictIfReal(key: key, context: context, state: &state, report: &report)
+            try await recordConflictIfReal(key: key, remoteDate: remoteDates[key], context: context, state: &state, report: &report)
         }
     }
 
     /// Fetches both sides of a planned conflict. Identical bytes (or both gone) settle it
     /// silently; otherwise the remote copy is parked under `conflicts/` and the key is recorded.
-    private func recordConflictIfReal(key: String, context: SyncContext, state: inout SyncState, report: inout SyncReport) async throws {
+    private func recordConflictIfReal(key: String, remoteDate: Date?, context: SyncContext, state: inout SyncState, report: inout SyncReport) async throws {
         let root = context.root
         let localData = try Self.readLocalIfExists(key: key, root: root)
         let remote = try await Self.getIfExists(key: key, store: context.store)
@@ -347,13 +358,12 @@ final class SyncEngine {
         let parked = SyncState.conflictFileURL(key: key, root: root)
         if let remote {
             try FileManager.default.createDirectory(at: parked.deletingLastPathComponent(), withIntermediateDirectories: true)
-            NoteStore.shared.registerSelfWrite(parked)
             try remote.data.write(to: parked, options: .atomic)
         } else if FileManager.default.fileExists(atPath: parked.path) {
-            NoteStore.shared.registerSelfWrite(parked)
             try FileManager.default.removeItem(at: parked)
         }
-        state.conflicts.append(SyncState.Conflict(key: key, detectedAt: Date()))
+        state.conflicts.append(SyncState.Conflict(key: key, detectedAt: Date(),
+                                                  remoteModifiedAt: remote == nil ? nil : remoteDate))
         report.newConflicts.append(key)
     }
 
@@ -396,7 +406,6 @@ final class SyncEngine {
         state.conflicts.removeAll { $0.key == key }
         let parked = SyncState.conflictFileURL(key: key, root: root)
         if FileManager.default.fileExists(atPath: parked.path) {
-            NoteStore.shared.registerSelfWrite(parked)
             try FileManager.default.removeItem(at: parked)
         }
         try finish(state: state, original: original, report: report, root: root)

@@ -23,6 +23,8 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     private let storePathLabel = NSTextField(labelWithString: "")
     private let clickBehaviorPopup = NSPopUpButton()
     private let noteEditModePopup = NSPopUpButton()
+    private let cmdQPopup = NSPopUpButton()
+    private let confirmQuitCheckbox = NSButton(checkboxWithTitle: "Ask before quitting", target: nil, action: nil)
     private let editorFontLabel = NSTextField(labelWithString: "")
     private let uiFontPopup = NSPopUpButton()
     private let uiFontSizePopup = NSPopUpButton()
@@ -209,6 +211,18 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         noteEditModePopup.action = #selector(noteEditModeChanged)
         selectNoteEditMode()
         stack.addArrangedSubview(noteEditModePopup)
+
+        // Cmd+Q behavior
+        stack.addArrangedSubview(sectionLabel("When pressing Cmd+Q"))
+        cmdQPopup.addItems(withTitles: Self.cmdQChoices.map(\.title))
+        cmdQPopup.target = self
+        cmdQPopup.action = #selector(cmdQActionChanged)
+        stack.addArrangedSubview(cmdQPopup)
+        confirmQuitCheckbox.font = Theme.body(13)
+        confirmQuitCheckbox.target = self
+        confirmQuitCheckbox.action = #selector(confirmQuitToggled)
+        stack.addArrangedSubview(confirmQuitCheckbox)
+        refreshCmdQControls()
 
         // Note editor font
         stack.addArrangedSubview(sectionLabel("Note editor font"))
@@ -699,6 +713,30 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         case 1: PreferencesManager.shared.clickBehavior = .editRaw
         default: PreferencesManager.shared.clickBehavior = .openCommand
         }
+    }
+
+    /// Cmd+Q choices in popup order.
+    static let cmdQChoices: [(action: CmdQAction, title: String)] = [
+        (.quit, "Quit ThoughtQueue"), (.closeNote, "Close the front window"), (.nothing, "Do nothing"),
+    ]
+
+    /// Show the stored Cmd+Q settings; the confirmation only applies to quitting.
+    private func refreshCmdQControls() {
+        let prefs = PreferencesManager.shared
+        cmdQPopup.selectItem(at: Self.cmdQChoices.firstIndex { $0.action == prefs.cmdQAction } ?? 0)
+        confirmQuitCheckbox.state = prefs.confirmQuit ? .on : .off
+        confirmQuitCheckbox.isEnabled = prefs.cmdQAction == .quit
+    }
+
+    @objc private func cmdQActionChanged() {
+        let index = cmdQPopup.indexOfSelectedItem
+        guard Self.cmdQChoices.indices.contains(index) else { return }
+        PreferencesManager.shared.cmdQAction = Self.cmdQChoices[index].action
+        refreshCmdQControls()
+    }
+
+    @objc private func confirmQuitToggled(_ sender: NSButton) {
+        PreferencesManager.shared.confirmQuit = sender.state == .on
     }
 
     @objc private func noteEditModeChanged() {

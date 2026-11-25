@@ -85,6 +85,13 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         return note
     }
 
+    /// Save every open note before quitting, since windows do not close on quit. Returns the
+    /// titles of notes that could not be saved.
+    static func saveAllBeforeQuit() -> [String] {
+        // A snapshot: committing a title re-keys `open`.
+        Array(open.values).filter { !$0.editor.saveBeforeQuit() }.map(\.editor.currentNote.title)
+    }
+
     /// Tear down every open note window. Tests only, so one case cannot leak windows into the
     /// next; the app itself closes windows through the normal `windowWillClose` path.
     static func closeAllForTesting() {
@@ -184,6 +191,9 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         navigator.onNoteSelected = { [weak self] selected in
             self?.retarget(to: selected)
         }
+        navigator.onCreateNote = { [weak self] category, docType in
+            self?.createNote(category: category, docType: docType)
+        }
         editor.onToggleNavigator = { [weak self] in
             guard let self else { return }
             self.setNavigator(visible: self.navigatorItem.isCollapsed)
@@ -278,6 +288,19 @@ final class NoteWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         }
 
         editor.load(note: note) // re-keys the registry and retitles via onNoteChanged
+    }
+
+    /// Create a note from the navigator and show it in this window, ready to type.
+    private func createNote(category: String?, docType: NoteDocType) {
+        let body = docType == .checklist ? TaskList.newItemPrefix : ""
+        guard let note = NoteStore.shared.createNote(title: "", body: body, category: category,
+                                                     docType: docType) else {
+            ToastWindow.show(message: "Failed to create note")
+            return
+        }
+        editor.load(note: note)
+        editor.beginEditingNewNote()
+        navigator.reload()
     }
 
     /// Persist the navigator's width whenever the user drags the divider.
@@ -885,7 +908,8 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     /// Flip between rendered-markdown view mode and raw-markdown edit mode.
     @objc private func toggleMode() {
         if isEditing {
-            saveIfDirty()
+            // Rendering reads from disk, so leaving the editor now would drop the unsaved text.
+            guard saveIfDirty() else { return }
             renderMarkdown()
         } else {
             editRaw()
@@ -900,6 +924,16 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
         editRaw()
         view.window?.makeFirstResponder(textView)
         updateToggle()
+    }
+
+    /// Put the cursor in a note that was just created and loaded into this editor.
+    func beginEditingNewNote() {
+        if contentMode == .checklist {
+            checklist.focusFirstEditableRow()
+        } else {
+            beginEditingFromView()
+            view.window?.makeFirstResponder(textView)
+        }
     }
 
     /// Forward a pin-button click to the owning window, which flips the float state.
@@ -1315,11 +1349,25 @@ final class NoteEditorViewController: NSViewController, NSTextViewDelegate, NSTe
     }
 
     /// Persist the current raw text if we're editing and have unsaved changes.
-    func saveIfDirty() {
+    /// Returns false when the write failed, leaving the edit marked unsaved.
+    @discardableResult
+    func saveIfDirty() -> Bool {
         flushChecklist()
-        guard isEditing, isDirty else { return }
-        _ = NoteStore.shared.updateBody(of: note, body: textView.string)
+        if contentMode == .checklist { return checklistBody == TaskList.body(from: checklist.rows) }
+        guard isEditing, isDirty else { return true }
+        guard NoteStore.shared.updateBody(of: note, body: textView.string) else {
+            ToastWindow.show(message: "Save failed")
+            return false
+        }
         isDirty = false
         ToastWindow.show(message: "Saved")
+        return true
+    }
+
+    /// Save everything pending, including a title still being typed, before the app quits.
+    /// Returns false when the body could not be saved.
+    func saveBeforeQuit() -> Bool {
+        commitTitleIfNeeded()
+        return saveIfDirty()
     }
 }

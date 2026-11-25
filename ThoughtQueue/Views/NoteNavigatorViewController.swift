@@ -37,7 +37,11 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
     /// Called when the user picks a note in the list (never for programmatic selection).
     var onNoteSelected: ((Note) -> Void)?
 
+    /// Called when the user asks for a new note here: its category (nil is Uncategorized) and type.
+    var onCreateNote: ((_ category: String?, _ docType: NoteDocType) -> Void)?
+
     private let outlineView = NSOutlineView()
+    private let addButton = NSButton()
     private let searchField = NSSearchField()
     private var groups: [NoteNavigatorNode] = []
     /// Category names the user collapsed, so a reload doesn't re-expand them behind their back.
@@ -67,6 +71,15 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
         searchField.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(searchField)
 
+        addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "New note")
+        addButton.isBordered = false
+        addButton.contentTintColor = Theme.iconStroke
+        addButton.toolTip = "New note or list"
+        addButton.target = self
+        addButton.action = #selector(showAddMenu)
+        addButton.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(addButton)
+
         let scrollView = NSScrollView()
         scrollView.documentView = outlineView
         scrollView.hasVerticalScroller = true
@@ -94,7 +107,12 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
         NSLayoutConstraint.activate([
             searchField.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
             searchField.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
-            searchField.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
+            searchField.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -4),
+
+            addButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
+            addButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
+            addButton.widthAnchor.constraint(equalToConstant: 22),
+            addButton.heightAnchor.constraint(equalToConstant: 22),
 
             scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 8),
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -177,6 +195,54 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
             }
         }
         isProgrammatic = false
+    }
+
+    // MARK: - Creating notes
+
+    /// Folder for a note made with the "+" button: the shown note's, unless that one is archived
+    /// (the new note would be hidden from the popover).
+    var defaultNewNoteCategory: String? {
+        guard let url = highlightedURL, let root = NoteStore.shared.rootURL,
+              let category = Note.from(url: url, storeRoot: root)?.category,
+              !NoteStore.shared.isArchived(category: category) else { return nil }
+        return category
+    }
+
+    /// Pop the New Note / New List menu under the "+" button.
+    @objc private func showAddMenu() {
+        let menu = NSMenu()
+        newNoteItems(category: defaultNewNoteCategory).forEach(menu.addItem)
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: addButton.bounds.maxY + 4), in: addButton)
+    }
+
+    /// "New Note" and "New List" items that create in `category`.
+    func newNoteItems(category: String?) -> [NSMenuItem] {
+        [("New Note", NoteDocType.markdown), ("New List", .checklist)].map { title, type in
+            let item = NSMenuItem(title: title, action: #selector(createFromMenu), keyEquivalent: "")
+            item.target = self
+            item.representedObject = NewNoteRequest(category: category, docType: type)
+            return item
+        }
+    }
+
+    /// Where and what a menu item creates.
+    private final class NewNoteRequest {
+        let category: String?
+        let docType: NoteDocType
+        init(category: String?, docType: NoteDocType) {
+            self.category = category
+            self.docType = docType
+        }
+    }
+
+    /// Ask the owning window for the note, clearing any search that would hide its row.
+    @objc private func createFromMenu(_ sender: NSMenuItem) {
+        guard let request = sender.representedObject as? NewNoteRequest else { return }
+        // A pending row selection would otherwise switch away from the new note.
+        selectWorkItem?.cancel()
+        searchField.stringValue = ""
+        query = ""
+        onCreateNote?(request.category, request.docType)
     }
 
     // MARK: - Selection
@@ -333,6 +399,16 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
         return node.note
     }
 
+    /// The folder under the right-click; empty space falls back to the "+" button's choice.
+    private func clickedCategory() -> String? {
+        let row = outlineView.clickedRow
+        guard row >= 0, let node = outlineView.item(atRow: row) as? NoteNavigatorNode else {
+            return defaultNewNoteCategory
+        }
+        if let note = node.note { return note.category }
+        return node.category == Note.uncategorized ? nil : node.category
+    }
+
     /// Designate the clicked note as the working document (default quick-capture sink).
     @objc private func setWorkingDoc() {
         guard let note = clickedNote() else { return }
@@ -364,7 +440,9 @@ final class NoteNavigatorViewController: NSViewController, NSOutlineViewDataSour
 extension NoteNavigatorViewController: NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
+        newNoteItems(category: clickedCategory()).forEach(menu.addItem)
         guard let note = clickedNote() else { return }
+        menu.addItem(.separator())
         let working: NSMenuItem
         if isWorkingDocument(note) {
             working = NSMenuItem(title: "Unset Working Document", action: #selector(unsetWorkingDoc), keyEquivalent: "")

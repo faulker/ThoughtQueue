@@ -8,9 +8,15 @@ final class UIFontPreferenceTests: XCTestCase {
 
     private let defaults = UserDefaults.standard
 
+    /// The tests run in the real app, so the user's own settings must be put back.
+    private var saved: [String: Any?] = [:]
+
+    override func setUpWithError() throws {
+        for key in ["uiFontFamily", "uiFontScale"] { saved[key] = .some(defaults.object(forKey: key)) }
+    }
+
     override func tearDownWithError() throws {
-        defaults.removeObject(forKey: "uiFontFamily")
-        defaults.removeObject(forKey: "uiFontScale")
+        for (key, value) in saved { defaults.set(value, forKey: key) }
     }
 
     // MARK: - Stored values

@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -62,7 +64,7 @@ fun CategoryManagerScreen(app: TqApp, onBack: () -> Unit) {
     }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Categories") }, navigationIcon = { BackButton(onBack) }) }) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
+        Column(Modifier.padding(padding).consumeWindowInsets(padding).imePadding().fillMaxSize()) {
             Row(
                 Modifier.fillMaxWidth().padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,

@@ -21,7 +21,9 @@ You're reading something, debugging code, or thinking out loud and want to jot i
 - **Clone note** -- duplicate a note from the popover row; the copy keeps the same body and category, titled `copy <original>`
 - **Run notes anywhere** -- configurable "Open With" destinations: run a shell command against the note's file (open it in an editor, hand it to a CLI tool, whatever `{path}` template you want), or paste it into an app like Claude Desktop. No actions are set up by default; add, edit, or remove your own in Preferences
 - **Categories** -- organize notes however you want; create, rename, move between, archive, or delete categories, with folders on disk to match. Archived folders stay on disk but their notes drop out of the menu bar list. New categories can also be created inline from any category dropdown
-- **Working document** -- optionally designate one note as the default sink so quick captures append to it instead of creating a new file each time
+- **Cmd+Q control** -- Cmd+Q asks before quitting by default, and Preferences can make it close the front window or do nothing
+- **New notes from the side panel** -- the "+" button or right-click menu creates a note or list in the same window
+- **Working document** -- (per Mac, never synced) optionally designate one note as the default sink so quick captures append to it instead of creating a new file each time
 - **On-device auto-title & auto-category** -- optional, macOS 26+: suggests a title and category for each capture via Apple's on-device model, with a review toast to accept, tweak, or dismiss
 - **Local, plain-text storage** -- notes are `.md` files in a folder you choose; no database, so they're greppable and easy to sync or back up yourself
 - **Synced settings** -- on by default: your preferences (hotkeys, fonts, Open With actions, and the rest) are mirrored into the store folder, so if that folder is in iCloud/Dropbox they follow you to your other devices. Turn it off in Preferences to keep settings local

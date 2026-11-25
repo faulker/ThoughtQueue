@@ -1,15 +1,24 @@
 package com.thoughtqueue.app.ui
 
 import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
@@ -43,6 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -229,7 +240,7 @@ private fun NoteEditor(
             )
         },
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
+        Column(Modifier.padding(padding).consumeWindowInsets(padding).imePadding().fillMaxSize()) {
             CategoryRow(
                 current = note.category,
                 categories = categories,
@@ -259,27 +270,51 @@ private fun NoteEditor(
 /**
  * The raw markdown editor. Pressing Enter at the end of a list line continues the list (or ends
  * it on an empty item), by recognizing a freshly inserted newline and handing it to
- * [TaskList.applyReturn].
+ * [TaskList.applyReturn]. The caret is kept in view as it moves and as the keyboard opens.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RawEditor(value: TextFieldValue, onChange: (TextFieldValue) -> Unit, modifier: Modifier) {
     val palette = LocalPalette.current
-    BasicTextField(
-        value = value,
-        onValueChange = { new ->
-            val old = value
-            val p = new.selection.start
-            val insertedNewline = new.text.length == old.text.length + 1 &&
-                new.selection.collapsed && old.selection.collapsed &&
-                p >= 1 && new.text[p - 1] == '\n' && p - 1 == old.selection.start &&
-                new.text.removeRange(p - 1, p) == old.text
-            val edit = if (insertedNewline) TaskList.applyReturn(old.text, old.selection.start) else null
-            if (edit != null) onChange(TextFieldValue(edit.text, TextRange(edit.cursor))) else onChange(new)
-        },
-        textStyle = MaterialTheme.typography.bodyLarge.copy(color = palette.textPrimary),
-        cursorBrush = SolidColor(palette.accent),
-        modifier = modifier.padding(16.dp),
-    )
+    val requester = remember { BringIntoViewRequester() }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var focused by remember { mutableStateOf(false) }
+    val margin = with(LocalDensity.current) { 24.dp.toPx() }
+
+    BoxWithConstraints(modifier) {
+        // The viewport shrinks as the keyboard opens, which re-runs this with the new height.
+        LaunchedEffect(value.selection, layout, maxHeight, focused) {
+            val result = layout ?: return@LaunchedEffect
+            val caret = value.selection.end
+            // The layout can trail the text by a frame; it re-runs this when it catches up.
+            if (!focused || caret > result.layoutInput.text.length) return@LaunchedEffect
+            val rect = result.getCursorRect(caret)
+            requester.bringIntoView(rect.copy(bottom = rect.bottom + margin))
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = { new ->
+                val old = value
+                val p = new.selection.start
+                val insertedNewline = new.text.length == old.text.length + 1 &&
+                    new.selection.collapsed && old.selection.collapsed &&
+                    p >= 1 && new.text[p - 1] == '\n' && p - 1 == old.selection.start &&
+                    new.text.removeRange(p - 1, p) == old.text
+                val edit = if (insertedNewline) TaskList.applyReturn(old.text, old.selection.start) else null
+                if (edit != null) onChange(TextFieldValue(edit.text, TextRange(edit.cursor))) else onChange(new)
+            },
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = palette.textPrimary),
+            cursorBrush = SolidColor(palette.accent),
+            onTextLayout = { layout = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
+                .padding(16.dp)
+                .bringIntoViewRequester(requester)
+                .onFocusChanged { focused = it.isFocused },
+        )
+    }
 }
 
 /** Category dropdown with an inline "New category" field that replaces it while creating. */

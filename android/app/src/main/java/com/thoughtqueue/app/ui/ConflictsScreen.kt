@@ -17,22 +17,28 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.thoughtqueue.app.TqApp
+import com.thoughtqueue.app.sync.ConflictDetails
 import com.thoughtqueue.app.sync.ConflictResolution
 import com.thoughtqueue.app.sync.SyncErrorMessage
 import com.thoughtqueue.app.ui.theme.LocalPalette
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** A tappable strip on the notes list announcing open sync conflicts. */
 @Composable
@@ -52,8 +58,8 @@ fun ConflictBanner(count: Int, onClick: () -> Unit) {
 }
 
 /**
- * Lists the keys with open sync conflicts. Each offers Keep local (upload it over the remote),
- * Keep remote (replace the local copy) or Keep both (save the remote beside it as
+ * Lists the keys with open sync conflicts. Each offers Keep device (upload it over the bucket's),
+ * Keep bucket (replace the local copy) or Keep both (save the remote beside it as
  * "Name (remote).md"). The list updates itself from the engine as conflicts are resolved.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -91,19 +97,45 @@ fun ConflictsScreen(app: TqApp, onBack: () -> Unit) {
             LazyColumn(Modifier.fillMaxSize()) {
                 items(conflicts, key = { it.key }) { conflict ->
                     val enabled = busyKey == null
+                    var expanded by rememberSaveable(conflict.key) { mutableStateOf(false) }
+                    // Null while loading; a failure is shown in place of the details.
+                    val loaded by produceState<Result<ConflictDetails>?>(null, conflict, app.store.root) {
+                        value = withContext(Dispatchers.IO) { runCatching { ConflictDetails.load(conflict, app.store.root) } }
+                    }
                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Text(conflict.key, style = MaterialTheme.typography.titleMedium)
+                        Text(ConflictDetails.title(conflict.key), style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "Changed on this device and in the bucket.",
+                            listOfNotNull(
+                                ConflictDetails.category(conflict.key),
+                                "found ${ConflictDetails.formatDate(conflict.detectedAt)}",
+                            ).joinToString(", "),
                             color = palette.textSecondary,
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        loaded?.exceptionOrNull()?.let {
+                            Text("Could not read this note: ${it.message}", color = palette.danger, style = MaterialTheme.typography.bodySmall)
+                        }
+                        loaded?.getOrNull()?.let { details ->
+                            ConflictSide(
+                                "This device", details.newer == ConflictDetails.Side.LOCAL,
+                                ConflictDetails.sideDescription("edited", details.localModified, details.local),
+                                details.local.takeIf { expanded },
+                            )
+                            ConflictSide(
+                                "Bucket", details.newer == ConflictDetails.Side.REMOTE,
+                                ConflictDetails.sideDescription("uploaded", details.remoteModified, details.remote),
+                                details.remote.takeIf { expanded },
+                            )
+                            TextButton(onClick = { expanded = !expanded }) {
+                                Text(if (expanded) "Hide both versions" else "Show both versions")
+                            }
+                        }
                         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = { resolve(conflict.key, ConflictResolution.KEEP_LOCAL) }, Modifier.weight(1f), enabled = enabled) {
-                                Text("Keep local")
+                                Text("Keep device")
                             }
                             OutlinedButton(onClick = { resolve(conflict.key, ConflictResolution.KEEP_REMOTE) }, Modifier.weight(1f), enabled = enabled) {
-                                Text("Keep remote")
+                                Text("Keep bucket")
                             }
                             OutlinedButton(onClick = { resolve(conflict.key, ConflictResolution.KEEP_BOTH) }, Modifier.weight(1f), enabled = enabled) {
                                 Text("Keep both")
@@ -114,5 +146,28 @@ fun ConflictsScreen(app: TqApp, onBack: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** One version of a conflicted note: when it changed, its size, and its text when [preview] is given. */
+@Composable
+private fun ConflictSide(name: String, newer: Boolean, detail: String, preview: String?) {
+    val palette = LocalPalette.current
+    Text(
+        "$name${if (newer) " (newer)" else ""}: $detail",
+        color = if (newer) palette.accentBorder else palette.textPrimary,
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    if (preview != null) {
+        Text(
+            preview,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp)
+                .background(palette.accentSoftBackground, RoundedCornerShape(8.dp))
+                .padding(8.dp),
+        )
     }
 }

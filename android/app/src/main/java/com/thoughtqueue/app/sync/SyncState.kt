@@ -10,6 +10,7 @@ import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
@@ -17,7 +18,7 @@ import java.time.temporal.ChronoUnit
 
 /**
  * The sync engine's memory of the last successful sync, stored at
- * `<root>/.thoughtqueue/sync-state.json`. It is device-local and never uploaded. A port of the
+ * [fileOf]. It is device-local, never uploaded and never backed up. A port of the
  * desktop's `Sync/SyncState.swift`, written in the same JSON shape (pretty printed, sorted keys,
  * ISO 8601 dates without fractional seconds).
  *
@@ -43,7 +44,12 @@ data class SyncState(
     )
 
     /** A key both sides changed. It is skipped by sync until the user resolves it. */
-    data class Conflict(val key: String, val detectedAt: Instant)
+    data class Conflict(
+        val key: String,
+        val detectedAt: Instant,
+        /** When the bucket's copy was uploaded, if known. Null when deleted or recorded by an older version. */
+        val remoteModifiedAt: Instant? = null,
+    )
 
     /** Whether [key] currently has an open conflict. */
     fun hasConflict(key: String): Boolean = conflicts.any { it.key == key }
@@ -73,7 +79,9 @@ data class SyncState(
             conflicts.forEachIndexed { i, c ->
                 sb.append("    {\n")
                 sb.append("      \"detectedAt\" : ").append(quote(formatDate(c.detectedAt))).append(",\n")
-                sb.append("      \"key\" : ").append(quote(c.key)).append("\n")
+                sb.append("      \"key\" : ").append(quote(c.key))
+                c.remoteModifiedAt?.let { sb.append(",\n      \"remoteModifiedAt\" : ").append(quote(formatDate(it))) }
+                sb.append("\n")
                 sb.append("    }")
                 if (i < conflicts.size - 1) sb.append(",")
                 sb.append("\n")
@@ -105,19 +113,53 @@ data class SyncState(
     companion object {
         const val FILE_NAME = "sync-state.json"
 
-        /** Folder (under `.thoughtqueue/`) holding the remote side of each open conflict. */
+        /** Folder (beside the state file) holding the remote side of each open conflict. */
         const val CONFLICTS_FOLDER_NAME = "conflicts"
 
         /** The identity a state file is scoped to: endpoint, bucket and normalized prefix. */
         fun identity(config: S3Config): String =
             "${config.endpoint}|${config.bucket}|${config.normalizedPrefix}"
 
-        /** `<root>/.thoughtqueue/sync-state.json`. */
-        fun fileOf(root: File): File = File(File(root, NoteMetadataStore.FOLDER_NAME), FILE_NAME)
+        /**
+         * Folder holding one subfolder of state per notes root. The app points it at
+         * `noBackupFilesDir`, so a restored backup cannot carry this device's state to another.
+         * Null keeps the state in `<root>/.thoughtqueue/` (unit tests).
+         */
+        @Volatile var baseDir: File? = null
 
-        /** `<root>/.thoughtqueue/conflicts/<key>`, where the remote copy of a conflicted key is kept. */
+        /** Where older versions kept the state: `<root>/.thoughtqueue/`. */
+        private fun legacyDir(root: File) = File(root, NoteMetadataStore.FOLDER_NAME)
+
+        /** This device's state folder for [root], named by a hash of the root's canonical path. */
+        fun directory(root: File): File = baseDir?.let { File(it, hash(root.canonicalPath)) } ?: legacyDir(root)
+
+        /** The state file for [root]. */
+        fun fileOf(root: File): File = File(directory(root), FILE_NAME)
+
+        /** Where the remote copy of a conflicted key is parked. */
         fun conflictFile(key: String, root: File): File =
-            File(File(File(root, NoteMetadataStore.FOLDER_NAME), CONFLICTS_FOLDER_NAME), key)
+            File(File(directory(root), CONFLICTS_FOLDER_NAME), key)
+
+        /** Lowercase hex SHA256 of [text]. */
+        private fun hash(text: String): String = MessageDigest.getInstance("SHA-256")
+            .digest(text.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
+        /**
+         * Moves state written by older versions out of `<root>/.thoughtqueue/`. Roots are private
+         * to the app here, so the old state is always this device's own.
+         */
+        private fun migrateLegacy(root: File) {
+            val target = directory(root)
+            val legacy = legacyDir(root)
+            val oldState = File(legacy, FILE_NAME)
+            if (target == legacy || !oldState.exists() || fileOf(root).exists()) return
+            if (!target.isDirectory && !target.mkdirs()) throw IOException("cannot create ${target.path}")
+            // Parked copies first: the state file's presence is what marks the migration done.
+            val oldConflicts = File(legacy, CONFLICTS_FOLDER_NAME)
+            val newConflicts = File(target, CONFLICTS_FOLDER_NAME)
+            if (oldConflicts.exists() && !newConflicts.exists()) Files.move(oldConflicts.toPath(), newConflicts.toPath())
+            Files.move(oldState.toPath(), fileOf(root).toPath())
+        }
 
         /** A conflict timestamp for now, at the second precision the file stores. */
         fun now(): Instant = Instant.now().truncatedTo(ChronoUnit.SECONDS)
@@ -134,6 +176,7 @@ data class SyncState(
 
         /** Reads whatever state file exists regardless of identity, or null when there is none. */
         fun loadAnyIdentity(root: File): SyncState? {
+            migrateLegacy(root)
             val file = fileOf(root)
             if (!file.exists()) return null
             return decode(file.readText(Charsets.UTF_8))
@@ -160,7 +203,7 @@ data class SyncState(
                         ?: throw IllegalArgumentException("conflict without key")
                     val at = obj["detectedAt"]?.jsonPrimitive?.content
                         ?: throw IllegalArgumentException("conflict $key has no detectedAt")
-                    Conflict(key, Instant.parse(at))
+                    Conflict(key, Instant.parse(at), obj["remoteModifiedAt"]?.jsonPrimitive?.content?.let(Instant::parse))
                 } ?: emptyList()
                 return SyncState(identity, entries, conflicts)
             } catch (e: IllegalArgumentException) {

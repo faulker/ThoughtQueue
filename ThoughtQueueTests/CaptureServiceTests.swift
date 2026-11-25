@@ -12,6 +12,7 @@ final class CaptureServiceTests: XCTestCase {
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         store = NoteStore.shared
         store.rootURL = tempRoot
+        savedWorkingDocument = PreferencesManager.shared.workingDocumentURL
         // Ensure a clean working-doc setting for each test.
         PreferencesManager.shared.workingDocumentURL = nil
         // Keep capture tests deterministic: no background model calls.
@@ -20,10 +21,12 @@ final class CaptureServiceTests: XCTestCase {
     }
 
     private var autoIntelWasEnabled = true
+    /// The tests run in the real app, so the user's own setting must be put back.
+    private var savedWorkingDocument: URL?
 
     override func tearDownWithError() throws {
         PreferencesManager.shared.autoIntelEnabled = autoIntelWasEnabled
-        PreferencesManager.shared.workingDocumentURL = nil
+        PreferencesManager.shared.workingDocumentURL = savedWorkingDocument
         try? FileManager.default.removeItem(at: tempRoot)
         store.rootURL = nil
     }
@@ -61,7 +64,37 @@ final class CaptureServiceTests: XCTestCase {
         XCTAssertEqual(store.allNotes().count, 1, "append should not create a second note")
     }
 
-    func testWorkingDocDeletedExternallyFallsBackToNewNoteAndClearsSetting() throws {
+    func testFailedAppendKeepsTheSetting() throws {
+        // A folder at the path exists but cannot be written as a file.
+        let blocked = tempRoot.appendingPathComponent("blocked.md", isDirectory: true)
+        try FileManager.default.createDirectory(at: blocked, withIntermediateDirectories: true)
+        PreferencesManager.shared.workingDocumentURL = blocked
+
+        XCTAssertEqual(CaptureService.shared.persistCapture(text: "text"), .created)
+        XCTAssertEqual(PreferencesManager.shared.workingDocumentURL?.path, blocked.path)
+    }
+
+    func testRenameMoveAndDeleteFollowTheWorkingDocument() throws {
+        let note = try XCTUnwrap(store.createNote(title: "sink", body: "x", category: nil))
+        PreferencesManager.shared.workingDocumentURL = note.url
+
+        let renamed = try XCTUnwrap(store.rename(note, to: "renamed"))
+        XCTAssertEqual(store.workingDocumentNote?.title, "renamed")
+        let moved = try XCTUnwrap(store.move(renamed, to: "Work"))
+        XCTAssertEqual(store.workingDocumentNote?.category, "Work")
+        XCTAssertTrue(store.delete(moved))
+        XCTAssertNil(PreferencesManager.shared.workingDocumentURL)
+    }
+
+    func testDeletingAnotherNoteKeepsTheWorkingDocument() throws {
+        let note = try XCTUnwrap(store.createNote(title: "sink", body: "x", category: nil))
+        let other = try XCTUnwrap(store.createNote(title: "other", body: "x", category: nil))
+        PreferencesManager.shared.workingDocumentURL = note.url
+        XCTAssertTrue(store.delete(other))
+        XCTAssertEqual(store.workingDocumentNote?.title, "sink")
+    }
+
+    func testWorkingDocDeletedExternallyFallsBackToNewNoteAndKeepsSetting() throws {
         let working = try XCTUnwrap(store.createNote(title: "working", body: "start", category: nil))
         PreferencesManager.shared.workingDocumentURL = working.url
 
@@ -70,7 +103,8 @@ final class CaptureServiceTests: XCTestCase {
 
         let result = CaptureService.shared.persistCapture(text: "orphan capture")
         XCTAssertEqual(result, .created, "should create a new note when the working doc is gone")
-        XCTAssertNil(PreferencesManager.shared.workingDocumentURL, "stale working-doc setting must be cleared")
+        XCTAssertEqual(PreferencesManager.shared.workingDocumentURL?.path, working.url.path,
+                       "a missing file must not unset the working document")
 
         // A fresh note exists with the captured content.
         let notes = store.allNotes()

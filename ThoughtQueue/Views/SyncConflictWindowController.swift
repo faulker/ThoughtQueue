@@ -29,8 +29,8 @@ final class SyncConflictWindowController: NSWindowController, NSTableViewDataSou
     private let table = NSTableView()
     private let localText = NSTextView()
     private let remoteText = NSTextView()
-    private let localHeader = NSTextField(labelWithString: "Local")
-    private let remoteHeader = NSTextField(labelWithString: "Remote")
+    private let localHeader = NSTextField(labelWithString: "This Mac")
+    private let remoteHeader = NSTextField(labelWithString: "Bucket")
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
     private var buttons: [ThemedButton] = []
     private(set) var conflicts: [SyncState.Conflict] = []
@@ -39,7 +39,7 @@ final class SyncConflictWindowController: NSWindowController, NSTableViewDataSou
 
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 820, height: 480),
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 520),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
@@ -83,19 +83,20 @@ final class SyncConflictWindowController: NSWindowController, NSTableViewDataSou
         table.dataSource = self
         table.delegate = self
         table.backgroundColor = Theme.surface
+        table.rowHeight = Theme.metric(44)
         let listScroll = NSScrollView()
         listScroll.documentView = table
         listScroll.hasVerticalScroller = true
         listScroll.translatesAutoresizingMaskIntoConstraints = false
-        listScroll.widthAnchor.constraint(equalToConstant: 200).isActive = true
+        listScroll.widthAnchor.constraint(equalToConstant: 230).isActive = true
 
         let sides = NSStackView(views: [pane(localHeader, localText), pane(remoteHeader, remoteText)])
         sides.orientation = .horizontal
         sides.distribution = .fillEqually
         sides.spacing = 12
 
-        let keepLocal = ThemedButton(title: "Keep Local", prominent: false, target: self, action: #selector(keepLocal))
-        let keepRemote = ThemedButton(title: "Keep Remote", prominent: false, target: self, action: #selector(keepRemote))
+        let keepLocal = ThemedButton(title: "Keep This Mac\u{2019}s", prominent: false, target: self, action: #selector(keepLocal))
+        let keepRemote = ThemedButton(title: "Keep Bucket\u{2019}s", prominent: false, target: self, action: #selector(keepRemote))
         let keepBoth = ThemedButton(title: "Keep Both", prominent: true, target: self, action: #selector(keepBoth))
         buttons = [keepLocal, keepRemote, keepBoth]
         let buttonRow = NSStackView(views: buttons)
@@ -133,6 +134,8 @@ final class SyncConflictWindowController: NSWindowController, NSTableViewDataSou
     private func pane(_ header: NSTextField, _ text: NSTextView) -> NSView {
         header.font = Theme.body(11, weight: .semibold)
         header.textColor = Theme.accentBorder
+        header.lineBreakMode = .byTruncatingTail
+        header.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         text.isEditable = false
         text.isSelectable = true
         text.font = Theme.body(12.5)
@@ -182,21 +185,50 @@ final class SyncConflictWindowController: NSWindowController, NSTableViewDataSou
         guard let conflict = selectedConflict, let root = NoteStore.shared.rootURL else { return }
         do {
             let sides = try ConflictSides.load(key: conflict.key, root: root)
-            show(sides.local, in: localText)
-            show(sides.remote, in: remoteText)
+            let details = try ConflictDetails.load(conflict, root: root)
+            let changed = ConflictDetails.changedLines(local: sides.local ?? "", remote: sides.remote ?? "")
+            let bothExist = sides.local != nil && sides.remote != nil
+            show(sides.local, highlighting: bothExist ? changed.local : [], in: localText)
+            show(sides.remote, highlighting: bothExist ? changed.remote : [], in: remoteText)
+            setHeader(localHeader, name: "This Mac", newer: bothExist && details.newer == .local,
+                      detail: ConflictDetails.sideDescription(verb: "edited", date: details.localModified, text: sides.local))
+            setHeader(remoteHeader, name: "Bucket", newer: bothExist && details.newer == .remote,
+                      detail: ConflictDetails.sideDescription(verb: "uploaded", date: details.remoteModified, text: sides.remote))
             setError(nil)
         } catch {
-            show(nil, in: localText)
-            show(nil, in: remoteText)
+            localText.string = ""
+            remoteText.string = ""
+            localHeader.stringValue = "This Mac"
+            remoteHeader.stringValue = "Bucket"
             setError("Could not read \(conflict.key): \(error.localizedDescription)")
         }
     }
 
-    /// Shows `text`, or a dimmed "Deleted" when that side no longer exists.
-    private func show(_ text: String?, in view: NSTextView) {
+    /// Fills a pane header, e.g. "This Mac (newer): edited Nov 24, 2026 at 9:41 AM, 1 KB".
+    private func setHeader(_ header: NSTextField, name: String, newer: Bool, detail: String) {
+        header.stringValue = "\(name)\(newer ? " (newer)" : ""): \(detail)"
+        header.toolTip = header.stringValue
+    }
+
+    /// Shows `text` with the given lines tinted, or a dimmed "Deleted" when that side no longer exists.
+    private func show(_ text: String?, highlighting lines: Set<Int>, in view: NSTextView) {
+        let previous = NSRange(location: 0, length: (view.string as NSString).length)
+        view.textStorage?.removeAttribute(.backgroundColor, range: previous)
         if let text {
             view.string = text
             view.textColor = Theme.textPrimary
+            var location = 0
+            for (index, line) in text.components(separatedBy: "\n").enumerated() {
+                let length = (line as NSString).length
+                // Include the newline so a changed blank line is tinted too.
+                let end = min(location + length + 1, (text as NSString).length)
+                if lines.contains(index) {
+                    view.textStorage?.addAttribute(.backgroundColor, value: Theme.accentSoftBackground,
+                                                   range: NSRange(location: location, length: end - location))
+                }
+                location += length + 1
+                if location > (text as NSString).length { break }
+            }
         } else {
             view.string = "Deleted"
             view.textColor = Theme.textSecondary
@@ -240,11 +272,25 @@ final class SyncConflictWindowController: NSWindowController, NSTableViewDataSou
     func numberOfRows(in tableView: NSTableView) -> Int { conflicts.count }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let label = NSTextField(labelWithString: conflicts[row].key)
-        label.font = Theme.body(12.5)
-        label.textColor = Theme.textPrimary
-        label.lineBreakMode = .byTruncatingMiddle
-        return label
+        let conflict = conflicts[row]
+        let title = NSTextField(labelWithString: ConflictDetails.title(forKey: conflict.key))
+        title.font = Theme.body(13, weight: .semibold)
+        title.textColor = Theme.textPrimary
+        let found = "found " + conflict.detectedAt.formatted(date: .abbreviated, time: .shortened)
+        let subtitle = NSTextField(labelWithString: [ConflictDetails.category(forKey: conflict.key), found]
+            .compactMap { $0 }.joined(separator: ", "))
+        subtitle.font = Theme.body(11)
+        subtitle.textColor = Theme.textSecondary
+        for label in [title, subtitle] {
+            label.lineBreakMode = .byTruncatingTail
+            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
+        let stack = NSStackView(views: [title, subtitle])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 2
+        stack.toolTip = conflict.key
+        return stack
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {

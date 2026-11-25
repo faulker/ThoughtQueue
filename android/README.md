@@ -45,8 +45,8 @@ Same format and rules as the desktop (`../docs/sync.md`). A bucket written by ei
 - **Triggers**: launch, a debounced local edit (3 s), a WorkManager periodic job (15 minute minimum,
   needs network) and Sync Now (`TqApp.syncNow()`). Runs are serialized; a trigger during a run schedules
   one follow-up. Automatic triggers do nothing in `local` mode or without a full config.
-- **Conflicts**: the remote copy is parked under `.thoughtqueue/conflicts/`. A banner on the notes list
-  opens a screen with Keep local / Keep remote / Keep both.
+- **Conflicts**: the remote copy is parked beside the sync state in `noBackupFilesDir/sync-state/`. A banner on the notes list
+  opens a screen with each version's dates and text, and Keep device / Keep bucket / Keep both.
 - **Cleartext HTTP is allowed** (`res/xml/network_security_config.xml`) so a MinIO or RustFS server on
   your LAN works over `http://`. Use `https://` for anything on the internet. From the emulator, the
   host machine is `http://10.0.2.2:9000`.

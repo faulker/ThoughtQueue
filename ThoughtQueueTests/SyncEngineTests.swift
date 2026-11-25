@@ -65,6 +65,25 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertTrue(try state().hasConflict("note.md"))
     }
 
+    func testConflictRecordsWhenTheBucketCopyWasUploaded() async throws {
+        try await makeConflict()
+        let date = try XCTUnwrap(state().conflicts.first?.remoteModifiedAt)
+        XCTAssertEqual(date.timeIntervalSinceNow, 0, accuracy: 10)
+    }
+
+    /// An emptied folder (unmounted drive, replaced folder) must restore from the bucket.
+    func testEveryNoteVanishingDoesNotWipeTheBucket() async throws {
+        try writeLocal("a.md", "a")
+        try writeLocal("b.md", "b")
+        try await engine.run(context: context)
+        for key in ["a.md", "b.md"] { try fm.removeItem(at: tempRoot.appendingPathComponent(key)) }
+
+        let report = try await engine.run(context: context)
+        XCTAssertEqual(report.deletedRemote, [])
+        XCTAssertEqual(Set(report.downloaded), ["a.md", "b.md"])
+        XCTAssertEqual(readLocal("a.md"), "a")
+    }
+
     // MARK: - Propagation
 
     func testUploadRoundTrip() async throws {

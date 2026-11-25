@@ -210,7 +210,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prefsItem.target = self
         appMenu.addItem(prefsItem)
         appMenu.addItem(NSMenuItem.separator())
-        appMenu.addItem(NSMenuItem(title: "Quit ThoughtQueue", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        let quitItem = NSMenuItem(title: "Quit ThoughtQueue", action: #selector(handleQuitCommand), keyEquivalent: "q")
+        quitItem.target = self
+        appMenu.addItem(quitItem)
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
 
@@ -252,6 +254,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(viewMenuItem)
 
         NSApp.mainMenu = mainMenu
+    }
+
+    // MARK: - Cmd+Q
+
+    /// What the app menu's Quit command should do.
+    enum QuitDecision: Equatable {
+        case quit
+        case confirmThenQuit
+        case closeFrontWindow
+        case ignore
+    }
+
+    /// Decide what Quit does. Only the Cmd+Q keystroke follows the preference; clicking the menu
+    /// item is already deliberate and always quits.
+    static func quitDecision(action: CmdQAction, confirm: Bool, fromKeyboard: Bool) -> QuitDecision {
+        guard fromKeyboard else { return .quit }
+        switch action {
+        case .quit: return confirm ? .confirmThenQuit : .quit
+        case .closeNote: return .closeFrontWindow
+        case .nothing: return .ignore
+        }
+    }
+
+    /// The app menu's Quit item. Dock Quit, logout and the updater call `terminate` directly and
+    /// never come through here.
+    @objc private func handleQuitCommand() {
+        let prefs = PreferencesManager.shared
+        switch Self.quitDecision(action: prefs.cmdQAction, confirm: prefs.confirmQuit,
+                                 fromKeyboard: NSApp.currentEvent?.type == .keyDown) {
+        case .quit: NSApp.terminate(nil)
+        case .confirmThenQuit: confirmQuit()
+        case .closeFrontWindow: closeFrontWindow()
+        case .ignore: break
+        }
+    }
+
+    /// Save open notes on every kind of quit (Cmd+Q, menu, Dock, logout, update). A note that
+    /// cannot be saved stops the quit unless the user chooses to lose its changes.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let failed = NoteWindowController.saveAllBeforeQuit()
+        guard !failed.isEmpty else { return .terminateNow }
+        log.error("Could not save \(failed.count) notes before quitting")
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Some changes could not be saved"
+        alert.informativeText = failed.joined(separator: "\n")
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Quit Anyway")
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn ? .terminateCancel : .terminateNow
+    }
+
+    /// Ask before quitting, with a checkbox that turns the question off.
+    private func confirmQuit() {
+        let alert = NSAlert()
+        alert.messageText = "Quit ThoughtQueue?"
+        alert.informativeText = "Capture hotkeys and sync stop until you open it again."
+        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: "Cancel")
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = "Don\u{2019}t ask again"
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        if alert.suppressionButton?.state == .on { PreferencesManager.shared.confirmQuit = false }
+        NSApp.terminate(nil)
+    }
+
+    /// Close whichever window is in front, or the popover. Does nothing when neither is open.
+    private func closeFrontWindow() {
+        let candidates = [NSApp.keyWindow, NSApp.mainWindow].compactMap { $0 }
+        if let window = candidates.first(where: { $0.styleMask.contains(.closable) }) {
+            window.performClose(nil)
+        } else {
+            popoverController.close()
+        }
     }
 
     private func setupStatusItem() {
@@ -319,16 +396,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Open a window on the note set as the working document. Clears the preference when it
-    /// points at a note that no longer exists, matching quick capture's stale-path handling.
+    /// Open a window on the note set as the working document. A missing file only shows a toast;
+    /// the preference is kept because the file may come back (cloud drive, sync).
     func openWorkingDocument() {
         if let note = NoteStore.shared.workingDocumentNote {
             NoteWindowController.show(note: note)
             return
         }
         if PreferencesManager.shared.workingDocumentURL != nil {
-            PreferencesManager.shared.workingDocumentURL = nil
-            log.warning("Working document missing; cleared setting")
+            log.warning("Working document missing")
             ToastWindow.show(message: "Working document is missing")
         } else {
             ToastWindow.show(message: "No working document set")

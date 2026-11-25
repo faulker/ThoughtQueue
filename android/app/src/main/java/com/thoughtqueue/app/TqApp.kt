@@ -58,6 +58,7 @@ class TqApp : Application() {
     /** Create preferences, themes, the note store and the sync engine, then start the triggers. */
     override fun onCreate() {
         super.onCreate()
+        SyncState.baseDir = File(noBackupFilesDir, "sync-state")
         prefs = Preferences(this)
         themes = ThemeLibrary(File(filesDir, "themes")).also { it.reload() }
         secrets = EncryptedSecretStore(this)

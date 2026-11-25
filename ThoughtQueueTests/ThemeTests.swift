@@ -9,15 +9,18 @@ final class ThemeTests: XCTestCase {
     private var tempDir: URL!
     private let defaults = UserDefaults.standard
 
+    /// The tests run in the real app, so the user's own settings must be put back.
+    private var saved: [String: Any?] = [:]
+
     override func setUpWithError() throws {
+        for key in ["lightThemeID", "darkThemeID"] { saved[key] = .some(defaults.object(forKey: key)) }
         tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("ThemeTests-\(UUID().uuidString)", isDirectory: true)
     }
 
     override func tearDownWithError() throws {
         try? FileManager.default.removeItem(at: tempDir)
-        defaults.removeObject(forKey: "lightThemeID")
-        defaults.removeObject(forKey: "darkThemeID")
+        for (key, value) in saved { defaults.set(value, forKey: key) }
         Theme.lightPalette = .organicLight
         Theme.darkPalette = .organicDark
     }

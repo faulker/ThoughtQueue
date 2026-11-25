@@ -58,16 +58,18 @@ final class CaptureService {
         }
 
         // Append to the working document if one is set and still exists (rule #6).
+        var workingDocumentUnavailable = false
         if prefs.workingDocumentURL != nil {
             if let note = store.workingDocumentNote,
                store.append(to: note, text: text) {
                 ToastWindow.show(message: "Appended to \(note.title)")
                 return .appended(note.title)
             } else {
-                // Working doc deleted/moved externally (or append failed): clear the stale
-                // setting and fall through to a new note instead of recreating a dead path.
-                prefs.workingDocumentURL = nil
-                log.warning("Working document missing; cleared setting")
+                // Missing or unwritable: fall through to a new note instead of recreating a dead
+                // path. The setting is kept, since the file may only be gone for a moment (an
+                // unmounted cloud drive, a sync replacing it).
+                workingDocumentUnavailable = true
+                log.warning("Working document unavailable; saving a new note")
             }
         }
 
@@ -78,7 +80,8 @@ final class CaptureService {
             ToastWindow.show(message: "Failed to save")
             return .failed
         }
-        ToastWindow.show(message: "Captured!")
+        ToastWindow.show(message: workingDocumentUnavailable
+            ? "Working document unavailable, saved a new note" : "Captured!")
 
         // Async auto-title/categorize; never blocks capture.
         AutoIntelService.shared.process(note: note, body: text)

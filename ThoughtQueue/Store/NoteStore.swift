@@ -408,6 +408,7 @@ final class NoteStore {
             return nil
         }
         NoteMetadataStore.shared.move(from: note.url, to: dest)
+        remapWorkingDocument(from: note.url, to: dest)
         let renamed = Note.from(url: dest, storeRoot: root)
         postChange()
         return renamed
@@ -433,6 +434,7 @@ final class NoteStore {
             return nil
         }
         NoteMetadataStore.shared.move(from: note.url, to: dest)
+        remapWorkingDocument(from: note.url, to: dest)
         let moved = Note.from(url: dest, storeRoot: root)
         postChange()
         return moved
@@ -449,6 +451,10 @@ final class NoteStore {
             return false
         }
         NoteMetadataStore.shared.forget(note.url)
+        // A deliberate delete is the only thing that unsets the working document automatically.
+        if PreferencesManager.shared.workingDocumentURL?.standardizedFileURL == note.url.standardizedFileURL {
+            PreferencesManager.shared.workingDocumentURL = nil
+        }
         postChange()
         return true
     }
