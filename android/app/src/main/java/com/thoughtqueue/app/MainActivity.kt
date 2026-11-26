@@ -6,7 +6,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import com.thoughtqueue.app.ui.AppNav
 import com.thoughtqueue.app.ui.theme.ThemeAppearance
 import com.thoughtqueue.app.ui.theme.ThoughtQueueTheme
@@ -26,9 +25,7 @@ class MainActivity : ComponentActivity() {
             val themes by app.themes.themes.collectAsState()
             val light = themes.let { app.themes.resolve(lightId, ThemeAppearance.LIGHT) }
             val dark = themes.let { app.themes.resolve(darkId, ThemeAppearance.DARK) }
-            // Rebuild the screens when the storage mode moves the note store to another root.
-            val store by app.storeFlow.collectAsState()
-            ThoughtQueueTheme(mode, light, dark) { key(store) { AppNav(app) } }
+            ThoughtQueueTheme(mode, light, dark) { AppNav(app) }
         }
     }
 }

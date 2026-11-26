@@ -54,12 +54,12 @@ Same format and rules as the desktop (`../docs/sync.md`). A bucket written by ei
 
 ## Configuring sync
 
-Open Settings, then "Storage & Sync".
+Settings is a short list of pages: Appearance, Editing, Storage & Sync, and Updates. Open Settings, then "Storage & Sync". That page shows sync status, Sync now, and the storage mode picker. The bucket details live one level down under "S3 connection".
 
-1. Fill in the endpoint (`http://10.0.2.2:9000` from the emulator for a MinIO on your Mac), bucket, access key ID and, optionally, region and prefix. Path-style stays on for MinIO and RustFS; turn it off for AWS virtual-host style.
+1. In "S3 connection", fill in the endpoint (`http://10.0.2.2:9000` from the emulator for a MinIO on your Mac), bucket, access key ID and, optionally, region and prefix. Path-style stays on for MinIO and RustFS; turn it off for AWS virtual-host style.
 2. Type the secret key. It is write-only: the screen shows only "Saved" or "Not set", and "Clear secret" removes it (which also drops back to Local only). It is stored in EncryptedSharedPreferences, never in plain prefs.
 3. "Test connection" uses the values in the fields, saved or not.
-4. "Save" persists the fields and secret. The S3 only and Local + S3 options stay disabled until a valid config and a secret are saved.
+4. "Save" persists the fields, secret and sync triggers. The S3 only and Local + S3 options stay disabled until a valid config and a secret are saved.
 5. Pick a storage mode. Switching changes the store root (`notes/` or `s3cache/`) and the notes list.
 6. Triggers: launch, after changes, and an interval. Android enforces a 15 minute floor on the interval.
 

@@ -37,7 +37,6 @@ fun UpdateSettingsSection(app: TqApp) {
     val busy = status is UpdateController.Status.Checking || status is UpdateController.Status.Downloading
     val offer = status.offerVersion()
 
-    Text("Updates", style = MaterialTheme.typography.titleMedium, color = palette.accentBorder)
     Text("ThoughtQueue ${app.updates.runningVersion}", style = MaterialTheme.typography.bodyMedium)
     val line = status.describe()
     if (line.isNotEmpty()) {
@@ -73,6 +72,12 @@ fun UpdateSettingsSection(app: TqApp) {
             onLater = { prompt = null },
         )
     }
+}
+
+/** Updates page: the running version and the check / install button. */
+@Composable
+fun UpdateSettingsScreen(app: TqApp, onBack: () -> Unit) {
+    SettingsPage("Updates", onBack) { UpdateSettingsSection(app) }
 }
 
 /**
