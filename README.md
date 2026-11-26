@@ -53,7 +53,7 @@ The collapsible sidebar lists every note grouped by category, with search:
 <img src="screenshots/sidebar.png" alt="Note window with the navigation sidebar open" width="600">
 
 ### Preferences
-Configure appearance, hotkeys, "Open With" destinations, fonts, auto-update intervals, and more:
+Split into toolbar panes: General (login, Cmd+Q, updates), Appearance (themes, interface font), Notes (how notes open, editor font, "Open With" destinations), Capture (hotkeys, review toast, auto-intel), and Storage & Sync:
 
 <img src="screenshots/preferences.png" alt="Preferences window" width="400">
 
@@ -203,7 +203,7 @@ Click **Open With** (or the arrow icon on a row) to send a note to one of your c
 - **Command** -- runs a shell command with the note's file path substituted in, e.g. `zed {path}` or `code {path}`. Point it at any editor or CLI tool.
 - **App input** -- activates an app and either types `@<path>` (file-reference style, which suits Claude Desktop) or pastes the note's full body.
 
-Configure destinations in **Preferences > Open With actions**: add, edit, or delete your own actions. None are created by default.
+Configure destinations in **Preferences > Notes > Open With actions**: add, edit, or delete your own actions. None are created by default.
 
 ### Edit a note
 
@@ -248,11 +248,11 @@ Open **Categories…** from the menu bar icon's right-click menu to add, rename,
 
 ### Change the interface font
 
-**Preferences > Interface font** sets the font family and text size used by the app's own UI (popover rows, buttons, settings, the sidebar). Pick the bundled Figtree, the macOS system font, or any installed family, and a size from Small (90%) to Huge (150%); rows and controls grow with the text. The note body has its own separate setting under **Note editor font**. Changes apply to windows and menus opened after the change.
+**Preferences > Appearance > Interface font** sets the font family and text size used by the app's own UI (popover rows, buttons, settings, the sidebar). Pick the bundled Figtree, the macOS system font, or any installed family, and a size from Small (90%) to Huge (150%); rows and controls grow with the text. The note body has its own separate setting under **Preferences > Notes > Note editor font**. Changes apply to windows and menus opened after the change.
 
 ### Change hotkeys
 
-Right-click the menu bar icon > **Preferences**. Click a shortcut field and press your desired key combination.
+Right-click the menu bar icon > **Preferences > Capture**. Click a shortcut field and press your desired key combination.
 
 ### Sync settings across devices
 
@@ -262,7 +262,7 @@ whether a category folder is archived) and `settings.plist` (see below). Your no
 plain, untouched markdown. Delete `metadata.json` and nothing is lost: every note simply falls back
 to being classified by its contents, and every folder shows in the popover again.
 
-Settings sync is on by default. ThoughtQueue mirrors your syncable preferences into that hidden `.thoughtqueue/settings.plist` file inside the store folder, so if that folder lives in iCloud, Dropbox, or similar, your other Macs pointed at the same folder pick up the changes (last write wins). Device-local values (the store folder location itself and the working-document path) are never synced. Toggle it off under **Preferences > Sync settings via store folder** to keep settings on this Mac only.
+Settings sync is on by default. ThoughtQueue mirrors your syncable preferences into that hidden `.thoughtqueue/settings.plist` file inside the store folder, so if that folder lives in iCloud, Dropbox, or similar, your other Macs pointed at the same folder pick up the changes (last write wins). Device-local values (the store folder location itself and the working-document path) are never synced. Toggle it off under **Preferences > Storage & Sync > Sync settings via store folder** to keep settings on this Mac only.
 
 ### Keep the app up to date
 
@@ -270,11 +270,11 @@ ThoughtQueue checks for new releases about five seconds after launch and then on
 
 Update checks only run for installed or downloaded copies (for example under `/Applications`). Local development builds from Xcode or `./build.sh` (paths under `DerivedData` or `Build/Products`) never check or prompt, so a newer GitHub release won't interrupt a debug session or overwrite your build product.
 
-Under **Preferences > Updates** you'll find the running version, a **Check Now** button, a toggle for automatic checks, and the interval (hourly, every 6 hours, daily, or weekly). If ThoughtQueue is installed somewhere you can't write to, it offers to open the release page instead so you can install it by hand.
+Under **Preferences > General > Updates** you'll find the running version, a **Check Now** button, a toggle for automatic checks, and the interval (hourly, every 6 hours, daily, or weekly). If ThoughtQueue is installed somewhere you can't write to, it offers to open the release page instead so you can install it by hand.
 
 ## Sync with S3
 
-Notes can sync to any S3-compatible bucket (AWS S3, [RustFS](https://github.com/rustfs/rustfs), [MinIO](https://min.io)). Open **Preferences > Sync** and fill in:
+Notes can sync to any S3-compatible bucket (AWS S3, [RustFS](https://github.com/rustfs/rustfs), [MinIO](https://min.io)). Open **Preferences > Storage & Sync** and fill in:
 
 - **Endpoint**, e.g. `http://localhost:9000` or `https://s3.us-east-1.amazonaws.com`
 - **Region** (blank means `us-east-1`), **Bucket**, and an optional **Prefix** folder

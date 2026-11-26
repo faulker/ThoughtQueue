@@ -87,4 +87,17 @@ final class NoteWindowChromeTests: XCTestCase {
         XCTAssertEqual(controller.window?.level, PreferencesWindowController.level)
         XCTAssertTrue(controller.window?.collectionBehavior.contains(.moveToActiveSpace) ?? false)
     }
+
+    func testPreferencesIsSplitIntoToolbarPanes() throws {
+        let controller = PreferencesWindowController()
+        defer { controller.window?.close() }
+
+        let tabs = try XCTUnwrap(controller.window?.contentViewController as? NSTabViewController)
+        XCTAssertEqual(tabs.tabStyle, .toolbar)
+        XCTAssertEqual(tabs.tabViewItems.map(\.label), ["General", "Appearance", "Notes", "Capture", "Storage & Sync"])
+        XCTAssertEqual(tabs.tabViewItems.map(\.label), PreferencesWindowController.Pane.allCases.map(\.title))
+        for item in tabs.tabViewItems {
+            XCTAssertNotNil(item.image, "\(item.label) needs a toolbar icon")
+        }
+    }
 }

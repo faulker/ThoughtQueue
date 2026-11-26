@@ -9,8 +9,9 @@ private final class ActionTrampoline: NSObject {
     @objc func fire() { handler() }
 }
 
-/// Settings: store-location chooser, working document, click behavior, open-with editor,
-/// hotkeys, toast timeout, auto-intel toggle, update checks, start-at-login.
+/// Settings window, split into toolbar panes (`Pane`): General (login, Cmd+Q, updates),
+/// Appearance (themes, interface font), Notes (open behavior, editor font, open-with),
+/// Capture (hotkeys, toast, auto-intel), and Storage & Sync.
 final class PreferencesWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
     static let shared = PreferencesWindowController()
 
@@ -68,8 +69,8 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
 
     private var openWithActions: [OpenWithAction] = []
 
-    /// The window opens at this size. The sections total more than this, so the content scrolls
-    /// rather than the window growing tall enough to run off a small display.
+    /// Every pane opens at this size; a pane taller than this scrolls rather than growing the
+    /// window off a small display.
     static let contentSize = NSSize(width: 520, height: 640)
 
     /// Preferences always floats above the app's other windows. One step above
@@ -96,12 +97,257 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         setupUI()
     }
 
-    private func setupUI() {
-        let content = ThemedSurfaceView(frame: .zero)
-        window?.contentView = content
+    /// The window's panes, in toolbar order. Each is a scrolling column of sections.
+    enum Pane: Int, CaseIterable {
+        case general, appearance, notes, capture, sync
 
-        // The sections total more than fits in a comfortably sized window, so everything lives in
-        // a scroll view. Without it the bottom controls would be unreachable on a short display.
+        var title: String {
+            switch self {
+            case .general: return "General"
+            case .appearance: return "Appearance"
+            case .notes: return "Notes"
+            case .capture: return "Capture"
+            case .sync: return "Storage & Sync"
+            }
+        }
+
+        /// SF Symbol shown in the toolbar.
+        var symbol: String {
+            switch self {
+            case .general: return "gearshape"
+            case .appearance: return "paintpalette"
+            case .notes: return "note.text"
+            case .capture: return "keyboard"
+            case .sync: return "arrow.triangle.2.circlepath"
+            }
+        }
+    }
+
+    /// Builds one pane per `Pane` and hosts them in a toolbar-style tab view, the standard macOS
+    /// Settings layout, so no single page has to hold every section.
+    private func setupUI() {
+        var stacks: [Pane: NSStackView] = [:]
+        let tabs = NSTabViewController()
+        tabs.tabStyle = .toolbar
+        for pane in Pane.allCases {
+            let (view, stack) = makePaneView()
+            stacks[pane] = stack
+            let controller = NSViewController()
+            controller.view = view
+            controller.preferredContentSize = PreferencesWindowController.contentSize
+            let item = NSTabViewItem(viewController: controller)
+            item.label = pane.title
+            item.image = NSImage(systemSymbolName: pane.symbol, accessibilityDescription: pane.title)
+            tabs.addTabViewItem(item)
+        }
+        window?.toolbarStyle = .preference
+        window?.contentViewController = tabs
+        window?.setContentSize(PreferencesWindowController.contentSize)
+        window?.center()
+
+        for checkbox in [autoIntelCheckbox, alwaysOnTopCheckbox, syncSettingsCheckbox, startAtLoginCheckbox, autoUpdateCheckbox] {
+            checkbox.font = Theme.body(12.5)
+        }
+
+        // General: launch, quitting, updates
+        let general = stacks[.general]!
+        general.addArrangedSubview(sectionLabel("Startup"))
+        startAtLoginCheckbox.state = PreferencesManager.shared.startAtLogin ? .on : .off
+        startAtLoginCheckbox.target = self
+        startAtLoginCheckbox.action = #selector(startAtLoginToggled)
+        general.addArrangedSubview(startAtLoginCheckbox)
+        // Cmd+Q behavior
+        general.addArrangedSubview(sectionLabel("When pressing Cmd+Q"))
+        cmdQPopup.addItems(withTitles: Self.cmdQChoices.map(\.title))
+        cmdQPopup.target = self
+        cmdQPopup.action = #selector(cmdQActionChanged)
+        general.addArrangedSubview(cmdQPopup)
+        confirmQuitCheckbox.font = Theme.body(13)
+        confirmQuitCheckbox.target = self
+        confirmQuitCheckbox.action = #selector(confirmQuitToggled)
+        general.addArrangedSubview(confirmQuitCheckbox)
+        refreshCmdQControls()
+
+        // Updates
+        general.addArrangedSubview(sectionLabel("Updates"))
+        updateVersionLabel.stringValue = "ThoughtQueue \(UpdateService.currentVersion())"
+        updateVersionLabel.font = Theme.body(12)
+        updateVersionLabel.textColor = Theme.textSecondary
+        checkNowButton.bezelStyle = .rounded
+        checkNowButton.target = self
+        checkNowButton.action = #selector(checkNow)
+        general.addArrangedSubview(row([updateVersionLabel, checkNowButton]))
+
+        updateStatusLabel.font = Theme.body(12)
+        updateStatusLabel.textColor = Theme.textSecondary
+        updateStatusLabel.lineBreakMode = .byTruncatingTail
+        // A network error message can be arbitrarily long; truncate rather than stretch the
+        // fixed-width window.
+        updateStatusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        if UpdateService.isLocalDevelopmentBuild() {
+            updateStatusLabel.stringValue = UpdateService.UpdateError.localDevelopmentBuild.localizedDescription
+                ?? "Local development build"
+            checkNowButton.isEnabled = false
+            autoUpdateCheckbox.isEnabled = false
+            updateIntervalPopup.isEnabled = false
+        } else {
+            updateStatusLabel.stringValue = Self.lastCheckedText(PreferencesManager.shared.lastUpdateCheckAt)
+        }
+        general.addArrangedSubview(updateStatusLabel)
+
+        autoUpdateCheckbox.state = PreferencesManager.shared.autoUpdateCheckEnabled ? .on : .off
+        autoUpdateCheckbox.target = self
+        autoUpdateCheckbox.action = #selector(autoUpdateToggled)
+        general.addArrangedSubview(autoUpdateCheckbox)
+
+        updateIntervalPopup.addItems(withTitles: UpdateService.intervalChoices.map(\.title))
+        updateIntervalPopup.target = self
+        updateIntervalPopup.action = #selector(updateIntervalChanged)
+        selectUpdateInterval()
+        if !UpdateService.isLocalDevelopmentBuild() {
+            updateIntervalPopup.isEnabled = PreferencesManager.shared.autoUpdateCheckEnabled
+        }
+        general.addArrangedSubview(row([fixedLabel("Check", 50), updateIntervalPopup]))
+
+        // Appearance: theme and interface font
+        let appearance = stacks[.appearance]!
+        appearance.addArrangedSubview(sectionLabel("Theme"))
+        themeToggle.select(themeToggleIndex(for: PreferencesManager.shared.themeMode))
+        themeToggle.onSelect = { index in
+            PreferencesManager.shared.themeMode = [.dark, .light, .system][index]
+        }
+        appearance.addArrangedSubview(themeToggle)
+        lightThemePopup.target = self
+        lightThemePopup.action = #selector(lightThemeChanged)
+        darkThemePopup.target = self
+        darkThemePopup.action = #selector(darkThemeChanged)
+        appearance.addArrangedSubview(row([fixedLabel("Light:", 60), lightThemePopup]))
+        appearance.addArrangedSubview(row([fixedLabel("Dark:", 60), darkThemePopup]))
+        let importThemeBtn = NSButton(title: "Import Theme\u{2026}", target: self, action: #selector(importTheme))
+        importThemeBtn.bezelStyle = .rounded
+        let openThemesBtn = NSButton(title: "Open Themes Folder", target: self, action: #selector(openThemesFolder))
+        openThemesBtn.bezelStyle = .rounded
+        let reloadThemesBtn = NSButton(title: "Reload", target: self, action: #selector(reloadThemes))
+        reloadThemesBtn.bezelStyle = .rounded
+        appearance.addArrangedSubview(row([importThemeBtn, openThemesBtn, reloadThemesBtn]))
+        themeFailuresLabel.font = Theme.body(11)
+        themeFailuresLabel.textColor = Theme.danger
+        themeFailuresLabel.preferredMaxLayoutWidth = PreferencesWindowController.contentSize.width - 40
+        appearance.addArrangedSubview(themeFailuresLabel)
+        refreshThemeControls()
+
+        // Interface font (the app's own chrome, not the note body)
+        appearance.addArrangedSubview(sectionLabel("Interface font"))
+        setupUIFontControls()
+        appearance.addArrangedSubview(row([fixedLabel("Font:", 60), uiFontPopup]))
+        appearance.addArrangedSubview(row([fixedLabel("Size:", 60), uiFontSizePopup]))
+        let uiFontHint = NSTextField(labelWithString: "Applies to windows and menus opened after the change.")
+        uiFontHint.font = Theme.body(11)
+        uiFontHint.textColor = Theme.textSecondary
+        uiFontHint.lineBreakMode = .byTruncatingTail
+        uiFontHint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        appearance.addArrangedSubview(uiFontHint)
+
+        // Notes: how notes open and look, and external editors
+        let notes = stacks[.notes]!
+        notes.addArrangedSubview(sectionLabel("When clicking a note"))
+        clickBehaviorPopup.addItems(withTitles: ["Render markdown", "Edit raw", "Run open command"])
+        clickBehaviorPopup.target = self
+        clickBehaviorPopup.action = #selector(clickBehaviorChanged)
+        selectClickBehavior()
+        notes.addArrangedSubview(clickBehaviorPopup)
+
+        // Note editor edit-mode behavior
+        notes.addArrangedSubview(sectionLabel("When opening a note"))
+        noteEditModePopup.addItems(withTitles: ["Double-click to edit", "Single click to edit", "Always in edit mode"])
+        noteEditModePopup.target = self
+        noteEditModePopup.action = #selector(noteEditModeChanged)
+        selectNoteEditMode()
+        notes.addArrangedSubview(noteEditModePopup)
+
+        // Note editor font
+        notes.addArrangedSubview(sectionLabel("Note editor font"))
+        editorFontLabel.font = Theme.body(12)
+        editorFontLabel.textColor = Theme.textSecondary
+        editorFontLabel.lineBreakMode = .byTruncatingMiddle
+        updateEditorFontLabel()
+        let selectFontBtn = NSButton(title: "Select Font\u{2026}", target: self, action: #selector(selectFont))
+        selectFontBtn.bezelStyle = .rounded
+        let resetFontBtn = NSButton(title: "Reset", target: self, action: #selector(resetFont))
+        resetFontBtn.bezelStyle = .rounded
+        notes.addArrangedSubview(row([editorFontLabel, selectFontBtn, resetFontBtn]))
+
+        notes.addArrangedSubview(sectionLabel("Note windows"))
+        alwaysOnTopCheckbox.state = PreferencesManager.shared.noteAlwaysOnTop ? .on : .off
+        alwaysOnTopCheckbox.target = self
+        alwaysOnTopCheckbox.action = #selector(alwaysOnTopToggled)
+        notes.addArrangedSubview(alwaysOnTopCheckbox)
+
+        notes.addArrangedSubview(sectionLabel("Open With actions"))
+        let owScroll = NSScrollView()
+        owScroll.translatesAutoresizingMaskIntoConstraints = false
+        owScroll.hasVerticalScroller = true
+        owScroll.borderType = .bezelBorder
+        // Breathing room so the first row isn't pressed against the box's top edge.
+        owScroll.automaticallyAdjustsContentInsets = false
+        owScroll.contentInsets = NSEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
+        owScroll.documentView = openWithTable
+        owScroll.heightAnchor.constraint(equalToConstant: 100).isActive = true
+        owScroll.widthAnchor.constraint(equalToConstant: 470).isActive = true
+        let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("ow"))
+        openWithTable.addTableColumn(col)
+        openWithTable.headerView = nil
+        openWithTable.rowHeight = 22
+        openWithTable.delegate = self
+        openWithTable.dataSource = self
+        notes.addArrangedSubview(owScroll)
+        let addOWBtn = NSButton(title: "Add\u{2026}", target: self, action: #selector(addOpenWith))
+        addOWBtn.bezelStyle = .rounded
+        let editOWBtn = NSButton(title: "Edit\u{2026}", target: self, action: #selector(editOpenWith))
+        editOWBtn.bezelStyle = .rounded
+        let deleteOWBtn = NSButton(title: "Delete", target: self, action: #selector(deleteOpenWith))
+        deleteOWBtn.bezelStyle = .rounded
+        notes.addArrangedSubview(row([addOWBtn, editOWBtn, deleteOWBtn]))
+
+        // Capture: hotkeys, the review toast, auto-intel
+        let capture = stacks[.capture]!
+        capture.addArrangedSubview(sectionLabel("Hotkeys (restart to apply)"))
+        quickRecorder.translatesAutoresizingMaskIntoConstraints = false
+        detailedRecorder.translatesAutoresizingMaskIntoConstraints = false
+        quickRecorder.widthAnchor.constraint(equalToConstant: 180).isActive = true
+        quickRecorder.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        detailedRecorder.widthAnchor.constraint(equalToConstant: 180).isActive = true
+        detailedRecorder.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        quickRecorder.keyBinding = PreferencesManager.shared.quickCaptureKey
+        detailedRecorder.keyBinding = PreferencesManager.shared.detailedCaptureKey
+        quickRecorder.onChanged = { PreferencesManager.shared.quickCaptureKey = $0 }
+        detailedRecorder.onChanged = { PreferencesManager.shared.detailedCaptureKey = $0 }
+        capture.addArrangedSubview(row([fixedLabel("Quick Capture:", 140), quickRecorder]))
+        capture.addArrangedSubview(row([fixedLabel("Detailed Capture:", 140), detailedRecorder]))
+
+        // Toast timeout
+        capture.addArrangedSubview(sectionLabel("Review toast timeout (seconds)"))
+        timeoutField.stringValue = String(Int(PreferencesManager.shared.toastTimeout))
+        timeoutField.translatesAutoresizingMaskIntoConstraints = false
+        timeoutField.widthAnchor.constraint(equalToConstant: 60).isActive = true
+        timeoutField.target = self
+        timeoutField.action = #selector(timeoutChanged)
+        capture.addArrangedSubview(timeoutField)
+
+        capture.addArrangedSubview(sectionLabel("Organizing"))
+        autoIntelCheckbox.state = PreferencesManager.shared.autoIntelEnabled ? .on : .off
+        autoIntelCheckbox.target = self
+        autoIntelCheckbox.action = #selector(autoIntelToggled)
+        capture.addArrangedSubview(autoIntelCheckbox)
+
+        addSyncSection(to: stacks[.sync]!)
+    }
+
+    /// A pane's view: a themed surface holding a scroll view whose flipped document view stacks
+    /// sections from the top. Returns the view and the stack to add sections to.
+    private func makePaneView() -> (NSView, NSStackView) {
+        let content = ThemedSurfaceView(frame: NSRect(origin: .zero, size: PreferencesWindowController.contentSize))
+
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
@@ -140,218 +386,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
             // Drives the document view's height, which is what makes the scroll view scroll.
             stack.bottomAnchor.constraint(equalTo: documentView.bottomAnchor, constant: -20),
         ])
-
-        // Appearance
-        stack.addArrangedSubview(sectionLabel("Appearance"))
-        themeToggle.select(themeToggleIndex(for: PreferencesManager.shared.themeMode))
-        themeToggle.onSelect = { index in
-            PreferencesManager.shared.themeMode = [.dark, .light, .system][index]
-        }
-        stack.addArrangedSubview(themeToggle)
-        lightThemePopup.target = self
-        lightThemePopup.action = #selector(lightThemeChanged)
-        darkThemePopup.target = self
-        darkThemePopup.action = #selector(darkThemeChanged)
-        stack.addArrangedSubview(row([fixedLabel("Light:", 60), lightThemePopup]))
-        stack.addArrangedSubview(row([fixedLabel("Dark:", 60), darkThemePopup]))
-        let importThemeBtn = NSButton(title: "Import Theme\u{2026}", target: self, action: #selector(importTheme))
-        importThemeBtn.bezelStyle = .rounded
-        let openThemesBtn = NSButton(title: "Open Themes Folder", target: self, action: #selector(openThemesFolder))
-        openThemesBtn.bezelStyle = .rounded
-        let reloadThemesBtn = NSButton(title: "Reload", target: self, action: #selector(reloadThemes))
-        reloadThemesBtn.bezelStyle = .rounded
-        stack.addArrangedSubview(row([importThemeBtn, openThemesBtn, reloadThemesBtn]))
-        themeFailuresLabel.font = Theme.body(11)
-        themeFailuresLabel.textColor = Theme.danger
-        themeFailuresLabel.preferredMaxLayoutWidth = PreferencesWindowController.contentSize.width - 40
-        stack.addArrangedSubview(themeFailuresLabel)
-        refreshThemeControls()
-
-        // Interface font (the app's own chrome, not the note body)
-        stack.addArrangedSubview(sectionLabel("Interface font"))
-        setupUIFontControls()
-        stack.addArrangedSubview(row([fixedLabel("Font:", 60), uiFontPopup]))
-        stack.addArrangedSubview(row([fixedLabel("Size:", 60), uiFontSizePopup]))
-        let uiFontHint = NSTextField(labelWithString: "Applies to windows and menus opened after the change.")
-        uiFontHint.font = Theme.body(11)
-        uiFontHint.textColor = Theme.textSecondary
-        uiFontHint.lineBreakMode = .byTruncatingTail
-        uiFontHint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        stack.addArrangedSubview(uiFontHint)
-
-        // Store location
-        stack.addArrangedSubview(sectionLabel("Store Folder"))
-        storePathLabel.stringValue = PreferencesManager.shared.storeURL?.path ?? "(not set)"
-        storePathLabel.font = Theme.body(12)
-        storePathLabel.textColor = Theme.textSecondary
-        storePathLabel.lineBreakMode = .byTruncatingMiddle
-        chooseStoreButton.target = self
-        chooseStoreButton.action = #selector(chooseStore)
-        chooseStoreButton.bezelStyle = .rounded
-        stack.addArrangedSubview(row([storePathLabel, chooseStoreButton]))
-        storeNoteLabel.font = Theme.body(11.5)
-        storeNoteLabel.textColor = Theme.textSecondary
-        storeNoteLabel.stringValue = "Not used in S3 only mode: notes live in a hidden cache folder instead."
-        stack.addArrangedSubview(storeNoteLabel)
-
-        addSyncSection(to: stack)
-
-        // Click behavior
-        stack.addArrangedSubview(sectionLabel("When clicking a note"))
-        clickBehaviorPopup.addItems(withTitles: ["Render markdown", "Edit raw", "Run open command"])
-        clickBehaviorPopup.target = self
-        clickBehaviorPopup.action = #selector(clickBehaviorChanged)
-        selectClickBehavior()
-        stack.addArrangedSubview(clickBehaviorPopup)
-
-        // Note editor edit-mode behavior
-        stack.addArrangedSubview(sectionLabel("When opening a note"))
-        noteEditModePopup.addItems(withTitles: ["Double-click to edit", "Single click to edit", "Always in edit mode"])
-        noteEditModePopup.target = self
-        noteEditModePopup.action = #selector(noteEditModeChanged)
-        selectNoteEditMode()
-        stack.addArrangedSubview(noteEditModePopup)
-
-        // Cmd+Q behavior
-        stack.addArrangedSubview(sectionLabel("When pressing Cmd+Q"))
-        cmdQPopup.addItems(withTitles: Self.cmdQChoices.map(\.title))
-        cmdQPopup.target = self
-        cmdQPopup.action = #selector(cmdQActionChanged)
-        stack.addArrangedSubview(cmdQPopup)
-        confirmQuitCheckbox.font = Theme.body(13)
-        confirmQuitCheckbox.target = self
-        confirmQuitCheckbox.action = #selector(confirmQuitToggled)
-        stack.addArrangedSubview(confirmQuitCheckbox)
-        refreshCmdQControls()
-
-        // Note editor font
-        stack.addArrangedSubview(sectionLabel("Note editor font"))
-        editorFontLabel.font = Theme.body(12)
-        editorFontLabel.textColor = Theme.textSecondary
-        editorFontLabel.lineBreakMode = .byTruncatingMiddle
-        updateEditorFontLabel()
-        let selectFontBtn = NSButton(title: "Select Font\u{2026}", target: self, action: #selector(selectFont))
-        selectFontBtn.bezelStyle = .rounded
-        let resetFontBtn = NSButton(title: "Reset", target: self, action: #selector(resetFont))
-        resetFontBtn.bezelStyle = .rounded
-        stack.addArrangedSubview(row([editorFontLabel, selectFontBtn, resetFontBtn]))
-
-        // Hotkeys
-        stack.addArrangedSubview(sectionLabel("Hotkeys (restart to apply)"))
-        quickRecorder.translatesAutoresizingMaskIntoConstraints = false
-        detailedRecorder.translatesAutoresizingMaskIntoConstraints = false
-        quickRecorder.widthAnchor.constraint(equalToConstant: 180).isActive = true
-        quickRecorder.heightAnchor.constraint(equalToConstant: 24).isActive = true
-        detailedRecorder.widthAnchor.constraint(equalToConstant: 180).isActive = true
-        detailedRecorder.heightAnchor.constraint(equalToConstant: 24).isActive = true
-        quickRecorder.keyBinding = PreferencesManager.shared.quickCaptureKey
-        detailedRecorder.keyBinding = PreferencesManager.shared.detailedCaptureKey
-        quickRecorder.onChanged = { PreferencesManager.shared.quickCaptureKey = $0 }
-        detailedRecorder.onChanged = { PreferencesManager.shared.detailedCaptureKey = $0 }
-        stack.addArrangedSubview(row([fixedLabel("Quick Capture:", 140), quickRecorder]))
-        stack.addArrangedSubview(row([fixedLabel("Detailed Capture:", 140), detailedRecorder]))
-
-        // Toast timeout
-        stack.addArrangedSubview(sectionLabel("Review toast timeout (seconds)"))
-        timeoutField.stringValue = String(Int(PreferencesManager.shared.toastTimeout))
-        timeoutField.translatesAutoresizingMaskIntoConstraints = false
-        timeoutField.widthAnchor.constraint(equalToConstant: 60).isActive = true
-        timeoutField.target = self
-        timeoutField.action = #selector(timeoutChanged)
-        stack.addArrangedSubview(timeoutField)
-
-        // Open-with editor
-        stack.addArrangedSubview(sectionLabel("Open With actions"))
-        let owScroll = NSScrollView()
-        owScroll.translatesAutoresizingMaskIntoConstraints = false
-        owScroll.hasVerticalScroller = true
-        owScroll.borderType = .bezelBorder
-        // Breathing room so the first row isn't pressed against the box's top edge.
-        owScroll.automaticallyAdjustsContentInsets = false
-        owScroll.contentInsets = NSEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
-        owScroll.documentView = openWithTable
-        owScroll.heightAnchor.constraint(equalToConstant: 100).isActive = true
-        owScroll.widthAnchor.constraint(equalToConstant: 470).isActive = true
-        let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("ow"))
-        openWithTable.addTableColumn(col)
-        openWithTable.headerView = nil
-        openWithTable.rowHeight = 22
-        openWithTable.delegate = self
-        openWithTable.dataSource = self
-        stack.addArrangedSubview(owScroll)
-        let addOWBtn = NSButton(title: "Add\u{2026}", target: self, action: #selector(addOpenWith))
-        addOWBtn.bezelStyle = .rounded
-        let editOWBtn = NSButton(title: "Edit\u{2026}", target: self, action: #selector(editOpenWith))
-        editOWBtn.bezelStyle = .rounded
-        let deleteOWBtn = NSButton(title: "Delete", target: self, action: #selector(deleteOpenWith))
-        deleteOWBtn.bezelStyle = .rounded
-        stack.addArrangedSubview(row([addOWBtn, editOWBtn, deleteOWBtn]))
-
-        // Updates
-        stack.addArrangedSubview(sectionLabel("Updates"))
-        updateVersionLabel.stringValue = "ThoughtQueue \(UpdateService.currentVersion())"
-        updateVersionLabel.font = Theme.body(12)
-        updateVersionLabel.textColor = Theme.textSecondary
-        checkNowButton.bezelStyle = .rounded
-        checkNowButton.target = self
-        checkNowButton.action = #selector(checkNow)
-        stack.addArrangedSubview(row([updateVersionLabel, checkNowButton]))
-
-        updateStatusLabel.font = Theme.body(12)
-        updateStatusLabel.textColor = Theme.textSecondary
-        updateStatusLabel.lineBreakMode = .byTruncatingTail
-        // A network error message can be arbitrarily long; truncate rather than stretch the
-        // fixed-width window.
-        updateStatusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        if UpdateService.isLocalDevelopmentBuild() {
-            updateStatusLabel.stringValue = UpdateService.UpdateError.localDevelopmentBuild.localizedDescription
-                ?? "Local development build"
-            checkNowButton.isEnabled = false
-            autoUpdateCheckbox.isEnabled = false
-            updateIntervalPopup.isEnabled = false
-        } else {
-            updateStatusLabel.stringValue = Self.lastCheckedText(PreferencesManager.shared.lastUpdateCheckAt)
-        }
-        stack.addArrangedSubview(updateStatusLabel)
-
-        autoUpdateCheckbox.state = PreferencesManager.shared.autoUpdateCheckEnabled ? .on : .off
-        autoUpdateCheckbox.target = self
-        autoUpdateCheckbox.action = #selector(autoUpdateToggled)
-        stack.addArrangedSubview(autoUpdateCheckbox)
-
-        updateIntervalPopup.addItems(withTitles: UpdateService.intervalChoices.map(\.title))
-        updateIntervalPopup.target = self
-        updateIntervalPopup.action = #selector(updateIntervalChanged)
-        selectUpdateInterval()
-        if !UpdateService.isLocalDevelopmentBuild() {
-            updateIntervalPopup.isEnabled = PreferencesManager.shared.autoUpdateCheckEnabled
-        }
-        stack.addArrangedSubview(row([fixedLabel("Check", 50), updateIntervalPopup]))
-
-        // Toggles
-        for checkbox in [autoIntelCheckbox, alwaysOnTopCheckbox, syncSettingsCheckbox, startAtLoginCheckbox, autoUpdateCheckbox] {
-            checkbox.font = Theme.body(12.5)
-        }
-
-        autoIntelCheckbox.state = PreferencesManager.shared.autoIntelEnabled ? .on : .off
-        autoIntelCheckbox.target = self
-        autoIntelCheckbox.action = #selector(autoIntelToggled)
-        stack.addArrangedSubview(autoIntelCheckbox)
-
-        alwaysOnTopCheckbox.state = PreferencesManager.shared.noteAlwaysOnTop ? .on : .off
-        alwaysOnTopCheckbox.target = self
-        alwaysOnTopCheckbox.action = #selector(alwaysOnTopToggled)
-        stack.addArrangedSubview(alwaysOnTopCheckbox)
-
-        syncSettingsCheckbox.state = PreferencesManager.shared.syncSettingsEnabled ? .on : .off
-        syncSettingsCheckbox.target = self
-        syncSettingsCheckbox.action = #selector(syncSettingsToggled)
-        stack.addArrangedSubview(syncSettingsCheckbox)
-
-        startAtLoginCheckbox.state = PreferencesManager.shared.startAtLogin ? .on : .off
-        startAtLoginCheckbox.target = self
-        startAtLoginCheckbox.action = #selector(startAtLoginToggled)
-        stack.addArrangedSubview(startAtLoginCheckbox)
+        return (content, stack)
     }
 
     // MARK: - Sync section
@@ -394,17 +429,48 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         }
     }
 
-    /// Builds the Sync section: storage mode, S3 connection fields, test button, triggers, and status.
+    /// Builds the Storage & Sync pane: status and Sync Now first, then where notes live
+    /// (storage mode, store folder, settings sync), then the S3 connection, then sync triggers.
     private func addSyncSection(to stack: NSStackView) {
         let prefs = PreferencesManager.shared
-        stack.addArrangedSubview(sectionLabel("Sync"))
 
+        stack.addArrangedSubview(sectionLabel("Status"))
+        syncStatusLabel.font = Theme.body(12)
+        syncStatusLabel.textColor = Theme.textSecondary
+        // Shares the row with Sync Now, so it wraps short of the button.
+        syncStatusLabel.preferredMaxLayoutWidth = 360
+        syncNowButton.bezelStyle = .rounded
+        syncNowButton.target = self
+        syncNowButton.action = #selector(syncNowPressed)
+        stack.addArrangedSubview(row([syncNowButton, syncStatusLabel]))
+
+        stack.addArrangedSubview(sectionLabel("Storage"))
         storageModePopup.addItems(withTitles: Self.storageModeChoices.map(\.title))
         storageModePopup.selectItem(at: Self.storageModeChoices.firstIndex { $0.mode == prefs.storageMode } ?? 0)
         storageModePopup.target = self
         storageModePopup.action = #selector(storageModeChanged)
         stack.addArrangedSubview(row([fixedLabel("Storage", 90), storageModePopup]))
 
+        storePathLabel.stringValue = prefs.storeURL?.path ?? "(not set)"
+        storePathLabel.font = Theme.body(12)
+        storePathLabel.textColor = Theme.textSecondary
+        storePathLabel.lineBreakMode = .byTruncatingMiddle
+        storePathLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        chooseStoreButton.target = self
+        chooseStoreButton.action = #selector(chooseStore)
+        chooseStoreButton.bezelStyle = .rounded
+        stack.addArrangedSubview(row([fixedLabel("Folder", 90), storePathLabel, chooseStoreButton]))
+        storeNoteLabel.font = Theme.body(11.5)
+        storeNoteLabel.textColor = Theme.textSecondary
+        storeNoteLabel.stringValue = "Not used in S3 only mode: notes live in a hidden cache folder instead."
+        stack.addArrangedSubview(storeNoteLabel)
+
+        syncSettingsCheckbox.state = prefs.syncSettingsEnabled ? .on : .off
+        syncSettingsCheckbox.target = self
+        syncSettingsCheckbox.action = #selector(syncSettingsToggled)
+        stack.addArrangedSubview(syncSettingsCheckbox)
+
+        stack.addArrangedSubview(sectionLabel("S3 connection"))
         let fields: [(String, NSTextField, String, String)] = [
             ("Endpoint", endpointField, "https://s3.example.com", prefs.s3Endpoint),
             ("Region", regionField, "us-east-1 (default)", prefs.s3Region),
@@ -421,7 +487,6 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         stack.addArrangedSubview(row([fixedLabel("Secret key", 90), secretField]))
 
         pathStyleCheckbox.state = prefs.s3UsePathStyle ? .on : .off
-        pathStyleCheckbox.target = self
         pathStyleCheckbox.action = #selector(pathStyleToggled)
         stack.addArrangedSubview(pathStyleCheckbox)
 
@@ -434,6 +499,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         testResultLabel.preferredMaxLayoutWidth = 470
         stack.addArrangedSubview(testResultLabel)
 
+        stack.addArrangedSubview(sectionLabel("Sync triggers"))
         syncOnChangeCheckbox.state = prefs.syncOnChange ? .on : .off
         syncOnChangeCheckbox.action = #selector(syncTriggerToggled)
         syncAtLaunchCheckbox.state = prefs.syncAtLaunch ? .on : .off
@@ -451,15 +517,6 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         syncIntervalPopup.target = self
         syncIntervalPopup.action = #selector(syncIntervalChanged)
         stack.addArrangedSubview(row([syncOnIntervalCheckbox, syncIntervalPopup]))
-
-        syncNowButton.bezelStyle = .rounded
-        syncNowButton.target = self
-        syncNowButton.action = #selector(syncNowPressed)
-        stack.addArrangedSubview(syncNowButton)
-        syncStatusLabel.font = Theme.body(12)
-        syncStatusLabel.textColor = Theme.textSecondary
-        syncStatusLabel.preferredMaxLayoutWidth = 470
-        stack.addArrangedSubview(syncStatusLabel)
 
         s3Controls = [endpointField, regionField, bucketField, prefixField, accessKeyField, secretField,
                       pathStyleCheckbox, testConnectionButton, syncOnChangeCheckbox, syncAtLaunchCheckbox,
